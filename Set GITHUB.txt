@@ -1,0 +1,68 @@
+Jika belum ada GIT
+=================
+git init
+git add .
+git commit -m "first commit"
+git remote add origin https://github.com/wz1310/voice_cordova.git
+git branch -M main
+git push -u origin main
+
+TOKENXSS
+=====================
+11BJ6YAWQ0cgYoKboPcT43_mxcWlliSooBYJiIdthGX7zD3rHxv2Xhe1EXd5VI57l5B6KZF44Yj4Y0Lswq
+
+Untuk update setelah di set GIT
+================
+git add .
+git commit -m "update"
+git push
+
+Untuk pull lalu update
+=================
+git pull origin main
+
+Jika sudah ada Page
+====================
+git add .
+git commit -m "update"
+git push origin main
+npm run build
+npm run deploy
+ 
+Buat project vite reac
+====================
+npm create vite@latest rishop
+npm install tailwindcss @tailwindcss/vite
+=========
+Tambahkan ke vite.config.ts
+==========
+import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
+export default defineConfig({
+  plugins: [
+    tailwindcss(),
+  ],
+})
+=========
+Tambahkan ke index.css
+=================
+@import "tailwindcss";
+
+SET GRADLE
+==================
+Download Gradle: https://gradle.org/releases/
+Extract ke folder, misal: C:\Gradle\gradle-8.4.1
+Set environment variable GRADLE_HOME:
+Name: GRADLE_HOME
+Value: C:\Gradle\gradle-8.4.1
+Edit Path → tambahkan:
+%GRADLE_HOME%\bin
+cek gradle
+=========
+gradle -v
+
+download jdk
+=================
+https://www.techspot.com/downloads/5553-java-jdk.html
+java -version
+javac -version
