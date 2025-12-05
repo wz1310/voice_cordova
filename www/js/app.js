@@ -11,7 +11,7 @@ document.addEventListener("deviceready", () => {
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
     upgrade: false,
-    forceNew: trues
+    forceNew: true
   });
 
   // local user identity
