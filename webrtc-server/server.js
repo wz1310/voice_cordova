@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -71,7 +70,8 @@ io.on("connection", (socket) => {
       ...user,
       mic: "on",
       slot: Number(slot),
-      socketId: socket.id
+      socketId: socket.id,
+      speaking: false
     };
 
     // notify all
@@ -102,6 +102,16 @@ io.on("connection", (socket) => {
       slots[slot].mic = slots[slot].mic === "on" ? "off" : "on";
       io.emit("mic_status_changed", { slot, status: slots[slot].mic });
     }
+  });
+
+  // user speaking indicator
+  socket.on("user_speaking", ({ userId, speaking }) => {
+    for (const s in slots) {
+      if (slots[s] && slots[s].id === userId) {
+        slots[s].speaking = speaking;
+      }
+    }
+    socket.broadcast.emit("user_speaking", { userId, speaking });
   });
 
   // kick user
