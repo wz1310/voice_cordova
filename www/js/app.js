@@ -6,7 +6,7 @@ document.addEventListener("deviceready", () => {
   const statusBar = document.getElementById("statusBar");
   const chatInput = document.getElementById("chatInput");
 
-  const SIGNALING_URL = "https://m3h048qq-3000.asse.devtunnels.ms";
+  const SIGNALING_URL = "https://c1jx4415-5000.asse.devtunnels.ms";
 
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
