@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Voice Room</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="cordova.js"></script> <!-- Cordova runtime -->
+  <!-- Socket.IO client CDN (untuk produksi sebaiknya bundle sendiri) -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="host">
+        <div class="avatar host-avatar" id="hostAvatar"></div>
+        <div class="host-label">Host</div>
+      </div>
+    </header>
+
+    <main>
+      <div class="voice-grid" id="voiceGrid">
+        <!-- slot akan di-generate oleh JS -->
+      </div>
+    </main>
+
+    <footer>
+      <div id="statusBar">Status: disconnected</div>
+    </footer>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
