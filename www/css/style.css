@@ -1,177 +1,190 @@
-:root{
-  --bg:#0f1221;
-  --card:#141521;
-  --muted:#9aa0b4;
-  --accent:#6be3b6;
+/* ======== Layout Utama ======== */
+body {
+  margin: 0;
+  padding: 0;
+  background: #131313;
+  font-family: Arial, sans-serif;
 }
 
-html,body{
-  height:100%;
-  margin:0;
-  font-family:Helvetica,Arial,sans-serif;
-  background: linear-gradient(180deg, #090916 0%, #11121a 100%);
-  color:#fff;
+.container {
+  max-width: 500px;
+  margin: auto;
+  padding: 10px;
+  text-align: center;
 }
 
-.container{
-  max-width:480px;
-  margin:0 auto;
-  padding:18px;
+header {
+  margin-bottom: 10px;
 }
 
-header{
-  display:flex;
-  justify-content:center;
-  margin-bottom:18px;
+.host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.host{
-  text-align:center;
-}
-
-.host-avatar{
-  width:110px;
-  height:110px;
-  border-radius:50%;
-  background:linear-gradient(135deg,#4b5563,#1f2937);
-  border:4px solid rgba(255,255,255,0.06);
-  box-shadow:0 6px 18px rgba(0,0,0,0.6);
-  margin:0 auto;
-}
-
-.host-label{
-  margin-top:8px;
-  font-size:14px;
-  color:var(--muted);
-}
-
-/* Grid of slots */
-.voice-grid{
-  display:grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap:14px;
-  justify-items:center;
-  align-items:center;
-  padding:8px;
-}
-
-/* Circle slot */
-.circle{
-  width:74px;
-  height:74px;
-  border-radius:50%;
-  background: rgba(255, 255, 255, 0.242);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:var(--muted);
-  font-size:28px;
-  position:relative;
-  cursor:pointer;
-  transition: transform .12s ease, box-shadow .12s ease;
-  border:2px dashed rgba(255,255,255,0.04);
-}
-
-.circle:active{ transform: scale(.98); }
-
-.circle .avatar{
-  position:absolute;
-  inset:0;
-  border-radius:50%;
-  background-size:cover;
-  background-position:center;
-}
-
-.circle .mic{
-  position:absolute;
-  bottom:-6px;
-  right:-6px;
-  background:var(--card);
-  border-radius:50%;
-  width:28px;
-  height:28px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border:2px solid rgba(0,0,0,0.5);
-  font-size:12px;
-  color:var(--muted);
-}
-
-/* state: occupied */
-.circle.filled{
-  border: none;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-  background: linear-gradient(180deg, rgba(107,227,182,0.08), rgba(66,153,225,0.04));
-}
-
-/* state: speaking */
-.circle.speaking{
-  box-shadow: 0 0 20px 6px rgba(107,227,182,0.08), 0 12px 28px rgba(0,0,0,0.6);
-  animation: pulse 1.2s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-
-/* label under avatar */
-.slot-name{
-  margin-top:8px;
-  font-size:12px;
-  color:var(--muted);
-  text-align:center;
-}
-.footer{
-  margin-top:18px;
-  text-align:center;
-  color:var(--muted);
-  font-size:13px;
-}
-#statusBar{
-  margin-top:14px;
-  text-align:center;
-  color:var(--muted);
-  font-size:12px;
-}
-.avatar-wrapper {
-  position: relative;
-  width: 90px;
-  height: 90px;
-}
-
-.avatar-kick {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: red;
-  color: white;
-  width: 20px;
-  height: 20px;
+.host-avatar {
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
+  background: #555;
+}
+
+.host-label {
+  margin-top: 5px;
+  color: white;
+  font-size: 14px;
+}
+
+/* ======== Voice Grid ======== */
+.voice-grid {
+  margin-top: 15px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-gap: 25px;
+  justify-items: center;
+}
+
+.voice-slot {
+  position: relative;
+  width: 70px;
+  height: 70px;
+}
+
+/* ======== Avatar Circle ======== */
+.circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #222;
+  background-size: cover;
+  background-position: center;
+  transition: box-shadow 0.15s ease;
+}
+
+.circle.empty {
+  border: 2px dashed #555;
+}
+
+/* ======== Nama Slot ======== */
+.slot-name {
+  margin-top: 4px;
+  color: #ddd;
   font-size: 12px;
+  text-align: center;
+}
+
+/* ======== Mic Button ======== */
+.mic-btn {
+  position: absolute;
+  bottom: -5px;
+  left: -5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
+  font-size: 13px;
   cursor: pointer;
-  z-index: 5;
-  opacity: .85;
+  z-index: 3;
 }
+
+/* ======== Kick Button ======== */
 .kick-btn {
   position: absolute;
   top: -5px;
   right: -5px;
-  background: red;
-  color: white;
   width: 18px;
   height: 18px;
-  font-size: 12px;
   border-radius: 50%;
-  text-align: center;
-  line-height: 18px;
+  background: red;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
   cursor: pointer;
+  z-index: 3;
+}
+
+/* ======== Glow Chat Bubble ======== */
+.floating-text {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.75);
+  border-radius: 10px;
+  color: white;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
   z-index: 10;
-  display: none; /* hanya muncul kalau user lain */
+
+  /* Glow effect */
+  box-shadow: 0 0 12px rgba(0,255,255,0.9), 0 0 20px rgba(0,255,255,0.7);
+
+  opacity: 0;
+  animation: fadeIn 0.15s forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(5px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.floating-text.fade-out {
+  animation: fadeOut 0.35s forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+}
+
+/* ======== Chat Input ======== */
+#chatContainer {
+  margin-top: 80px;
+}
+
+#chatInput {
+  width: 90%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #222;
+  color: white;
+  font-size: 14px;
+}
+
+#chatInput::placeholder {
+  color: #777;
+}
+
+/* ======== Status Bar ======== */
+#statusBar {
+  margin-top: 20px;
+  color: #00ffaa;
+  font-weight: bold;
+  font-size: 14px;
+}
+.chat-bubble-glow {
+  position: absolute;
+  top: -40px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(0, 255, 180, 0.16);
+  color: white;
+  font-size: 13px;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(0,255,200,0.3);
+  box-shadow: 0 0 12px rgba(0,255,200,0.75);
+  opacity: 1;
+  transform: translateY(0);
+  transition: all .4s ease;
+  pointer-events: none;
 }

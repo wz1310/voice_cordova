@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -17,7 +18,7 @@ app.use((req, res, next) => {
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"], allowedHeaders: ["*"] },
   transports: ["polling"],
-  allowEIO3: true
+  allowEIO3: true,
 });
 
 // Force engine to send CORS on polling endpoints
@@ -27,14 +28,14 @@ io.engine.on("headers", (headers) => {
   headers["Access-Control-Allow-Headers"] = "*";
 });
 
-// ROOM STATE: slots map slotNumber -> user object
+// ROOM STATE: slotNumber -> user object
 const NUM_SLOTS = 8;
-const slots = {}; // e.g. slots[1] = { id: 'u123', name:'User', avatar:'...', mic:'on', slot:1, socketId:'abcd' }
+const slots = {}; // e.g. slots[1] = { id:'u123', name:'User', avatar:'...', mic:'on', slot:1, socketId:'...' }
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // identify user (optional)
+  // optional identify
   socket.on("identify", (user) => {
     socket.data.user = user;
   });
@@ -46,20 +47,20 @@ io.on("connection", (socket) => {
 
   // join voice slot
   socket.on("join_voice", ({ slot, user }) => {
-    if (slot < 0 || slot >= NUM_SLOTS) {
+    if (typeof slot !== "number" || slot < 1 || slot > NUM_SLOTS) {
       socket.emit("join_failed", { slot, reason: "invalid_slot" });
       return;
     }
 
-    // remove user from any previous slot
+    // remove user from previous slot (if any)
     for (const s in slots) {
-      if (slots[s].id === user.id) {
+      if (slots[s] && slots[s].id === user.id) {
         delete slots[s];
         io.emit("user_left_voice", { slot: Number(s) });
       }
     }
 
-    // check if slot occupied
+    // if slot occupied by different user -> fail
     if (slots[slot] && slots[slot].id !== user.id) {
       socket.emit("join_failed", { slot, reason: "occupied" });
       return;
@@ -71,13 +72,13 @@ io.on("connection", (socket) => {
       mic: "on",
       slot: Number(slot),
       socketId: socket.id,
-      speaking: false
+      speaking: false,
     };
 
-    // notify all
+    // notify all clients
     io.emit("user_joined_voice", { slot, user: slots[slot] });
 
-    // send existing peers to the new joiner
+    // prepare existing peers list for the new joiner
     const existing = [];
     for (const s in slots) {
       const u = slots[s];
@@ -104,37 +105,64 @@ io.on("connection", (socket) => {
     }
   });
 
-  // user speaking indicator
+  // user speaking indicator (broadcast to others)
   socket.on("user_speaking", ({ userId, speaking }) => {
     for (const s in slots) {
-      if (slots[s] && slots[s].id === userId) {
-        slots[s].speaking = speaking;
-      }
+      if (slots[s] && slots[s].id === userId) slots[s].speaking = speaking;
     }
     socket.broadcast.emit("user_speaking", { userId, speaking });
   });
 
-  // kick user
+  // user chat (typing / live text)
+  socket.on("user_chat", ({ userId, message }) => {
+    io.emit("user_chat", { userId, message });
+  });
+
+  // kick user (only remove target user and notify)
   socket.on("kick_user", ({ userId }) => {
-    console.log("Kick user:", userId);
+    console.log("Kick requested for:", userId);
+
+    let kickedSlot = null;
+    let kickedSocketId = null;
+
     for (const s in slots) {
       if (slots[s] && slots[s].id === userId) {
+        kickedSlot = Number(s);
+        kickedSocketId = slots[s].socketId;
         delete slots[s];
+        break; // user IDs unique, stop after found
       }
     }
-    io.emit("update_slots", slots);
+
+    if (kickedSlot !== null) {
+      // notify everyone slot emptied (clients handle UI update)
+      io.emit("user_left_voice", { slot: kickedSlot });
+    } else {
+      // defensive: send update_slots if nothing found
+      io.emit("update_slots", slots);
+    }
+
+    if (kickedSocketId) {
+      // send 'kicked' only to target socket
+      io.to(kickedSocketId).emit("kicked");
+      console.log("Sent 'kicked' to:", kickedSocketId);
+      // NOTE: we do not forcibly disconnect server-side here to allow client cleanup flow.
+    }
   });
 
   // ---------------- WebRTC signaling ----------------
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
+    if (!toSocketId) return;
     io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-answer", ({ toSocketId, fromSocketId, sdp }) => {
+    if (!toSocketId) return;
     io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-ice", ({ toSocketId, candidate, fromSocketId }) => {
+    if (!toSocketId) return;
     io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
   });
 
@@ -142,7 +170,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
     for (const s in slots) {
-      if (slots[s].socketId === socket.id) {
+      if (slots[s] && slots[s].socketId === socket.id) {
         delete slots[s];
         io.emit("user_left_voice", { slot: Number(s) });
       }
