@@ -28,26 +28,31 @@ io.engine.on("headers", (headers) => {
   headers["Access-Control-Allow-Headers"] = "*";
 });
 
-// ROOM STATE: slots map slotNumber -> user object (include socketId)
+// ROOM STATE: slots map slotNumber -> user object
 const NUM_SLOTS = 8;
 const slots = {}; // e.g. slots[1] = { id: 'u123', name:'User', avatar:'...', mic:'on', slot:1, socketId:'abcd' }
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // identify user (client sends user info)
+  // identify user (optional)
   socket.on("identify", (user) => {
-    socket.data.user = user; // keep user info if needed
+    socket.data.user = user;
   });
 
-  // client asks full room snapshot
+  // get full room state
   socket.on("get_room_state", () => {
     io.to(socket.id).emit("room_state", { slots });
   });
 
-  // join voice (slot)
+  // join voice slot
   socket.on("join_voice", ({ slot, user }) => {
-    // remove user from any previous slot (auto-move)
+    if (slot < 0 || slot >= NUM_SLOTS) {
+      socket.emit("join_failed", { slot, reason: "invalid_slot" });
+      return;
+    }
+
+    // remove user from any previous slot
     for (const s in slots) {
       if (slots[s].id === user.id) {
         delete slots[s];
@@ -55,13 +60,13 @@ io.on("connection", (socket) => {
       }
     }
 
-    // if slot occupied by other, reject
+    // check if slot occupied
     if (slots[slot] && slots[slot].id !== user.id) {
       socket.emit("join_failed", { slot, reason: "occupied" });
       return;
     }
 
-    // save user with socketId to be used in signaling
+    // assign slot
     slots[slot] = {
       ...user,
       mic: "on",
@@ -69,22 +74,21 @@ io.on("connection", (socket) => {
       socketId: socket.id
     };
 
-    // notify everyone user joined
+    // notify all
     io.emit("user_joined_voice", { slot, user: slots[slot] });
 
-    // inform the new joiner about existing peers (socketIds)
+    // send existing peers to the new joiner
     const existing = [];
     for (const s in slots) {
       const u = slots[s];
       if (u.socketId && u.socketId !== socket.id) existing.push({ slot: Number(s), socketId: u.socketId });
     }
-    // send list only to the newly joined socket
     io.to(socket.id).emit("existing_peers", existing);
 
     console.log("User joined slot:", slot, slots[slot]);
   });
 
-  // leave voice
+  // leave voice slot
   socket.on("leave_voice", ({ slot, userId }) => {
     if (slots[slot] && slots[slot].id === userId) {
       delete slots[slot];
@@ -100,23 +104,31 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ---------------- Signaling events ----------------
-  // offer from A to B
+  // kick user
+  socket.on("kick_user", ({ userId }) => {
+    console.log("Kick user:", userId);
+    for (const s in slots) {
+      if (slots[s] && slots[s].id === userId) {
+        delete slots[s];
+      }
+    }
+    io.emit("update_slots", slots);
+  });
+
+  // ---------------- WebRTC signaling ----------------
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
     io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
   });
 
-  // answer from B to A
   socket.on("webrtc-answer", ({ toSocketId, fromSocketId, sdp }) => {
     io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
   });
 
-  // ice candidate
   socket.on("webrtc-ice", ({ toSocketId, candidate, fromSocketId }) => {
     io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
   });
 
-  // disconnect cleanup: if user had a slot, free it and notify
+  // disconnect cleanup
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
     for (const s in slots) {
