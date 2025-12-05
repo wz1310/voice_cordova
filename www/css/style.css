@@ -60,7 +60,7 @@ header{
   width:74px;
   height:74px;
   border-radius:50%;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.242);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -135,4 +135,43 @@ header{
   text-align:center;
   color:var(--muted);
   font-size:12px;
+}
+.avatar-wrapper {
+  position: relative;
+  width: 90px;
+  height: 90px;
+}
+
+.avatar-kick {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: red;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  opacity: .85;
+}
+.kick-btn {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: red;
+  color: white;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  cursor: pointer;
+  z-index: 10;
+  display: none; /* hanya muncul kalau user lain */
 }
