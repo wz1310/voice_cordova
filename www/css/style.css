@@ -38,10 +38,10 @@ header {
 
 /* ======== Voice Grid ======== */
 .voice-grid {
-  margin-top: 15px;
+  margin-top: 75px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-gap: 25px;
+  grid-gap: 20px;
   justify-items: center;
 }
 
@@ -187,4 +187,17 @@ header {
   transform: translateY(0);
   transition: all .4s ease;
   pointer-events: none;
+}
+.keluar-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #000000aa;
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: white;
+  border: 1px solid #00ffaa;
+  cursor: pointer;
+  font-size: 13px;
+  z-index: 20;
 }

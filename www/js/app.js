@@ -30,9 +30,21 @@ document.addEventListener("deviceready", () => {
   const RTC_CONFIG = {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
-      { urls: ["turn:global.relay.metered.ca:80"], username: "openai", credential: "openai" },
-      { urls: ["turn:global.relay.metered.ca:443"], username: "openai", credential: "openai" },
-      { urls: ["turn:global.relay.metered.ca:443?transport=tcp"], username: "openai", credential: "openai" },
+      {
+        urls: ["turn:global.relay.metered.ca:80"],
+        username: "openai",
+        credential: "openai",
+      },
+      {
+        urls: ["turn:global.relay.metered.ca:443"],
+        username: "openai",
+        credential: "openai",
+      },
+      {
+        urls: ["turn:global.relay.metered.ca:443?transport=tcp"],
+        username: "openai",
+        credential: "openai",
+      },
     ],
   };
 
@@ -74,7 +86,9 @@ document.addEventListener("deviceready", () => {
 
       // Unlock autoplay on first user interaction
       const unlock = () => {
-        audio.play().catch(() => { /* ignore */ });
+        audio.play().catch(() => {
+          /* ignore */
+        });
         document.body.removeEventListener("click", unlock);
         document.body.removeEventListener("touchstart", unlock);
       };
@@ -116,7 +130,9 @@ document.addEventListener("deviceready", () => {
       if (mySlot) {
         const myCircle = document.querySelector(`#slot${mySlot} .circle`);
         if (myCircle) {
-          myCircle.style.boxShadow = speaking ? "0 0 20px rgba(0,255,100,0.9)" : "none";
+          myCircle.style.boxShadow = speaking
+            ? "0 0 20px rgba(0,255,100,0.9)"
+            : "none";
         }
       }
 
@@ -139,10 +155,13 @@ document.addEventListener("deviceready", () => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
     // debug logs
-    pc.onconnectionstatechange = () => console.debug("PC state", peerSocketId, pc.connectionState);
-    pc.oniceconnectionstatechange = () => console.debug("ICE state", peerSocketId, pc.iceConnectionState);
+    pc.onconnectionstatechange = () =>
+      console.debug("PC state", peerSocketId, pc.connectionState);
+    pc.oniceconnectionstatechange = () =>
+      console.debug("ICE state", peerSocketId, pc.iceConnectionState);
 
-    if (localStream) localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    if (localStream)
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
 
     const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
 
@@ -160,9 +179,14 @@ document.addEventListener("deviceready", () => {
       if (event.candidate) {
         // helpful debug to check for relay candidates
         try {
-          if ((event.candidate.candidate || "").includes("typ relay")) console.debug("Emitting relay candidate for", peerSocketId);
+          if ((event.candidate.candidate || "").includes("typ relay"))
+            console.debug("Emitting relay candidate for", peerSocketId);
         } catch (e) {}
-        socket.emit("webrtc-ice", { toSocketId: peerSocketId, fromSocketId: socket.id, candidate: event.candidate });
+        socket.emit("webrtc-ice", {
+          toSocketId: peerSocketId,
+          fromSocketId: socket.id,
+          candidate: event.candidate,
+        });
       }
     };
 
@@ -195,10 +219,15 @@ document.addEventListener("deviceready", () => {
   });
 
   socket.on("user_speaking", ({ userId, speaking }) => {
-    const slotKey = Object.keys(lastSlots).find((s) => lastSlots[s]?.id === userId);
+    const slotKey = Object.keys(lastSlots).find(
+      (s) => lastSlots[s]?.id === userId
+    );
     if (!slotKey) return;
     const circle = document.querySelector(`#slot${slotKey} .circle`);
-    if (circle) circle.style.boxShadow = speaking ? "0 0 30px rgba(0,255,150,0.9)" : "none";
+    if (circle)
+      circle.style.boxShadow = speaking
+        ? "0 0 30px rgba(0,255,150,0.9)"
+        : "none";
   });
 
   socket.on("mic_status_changed", ({ slot, status }) => {
@@ -211,7 +240,9 @@ document.addEventListener("deviceready", () => {
     console.log("update_slots received", newSlots);
     lastSlots = newSlots || {};
     updateAllSlots(lastSlots);
-    const stillHere = Object.values(lastSlots).some((u) => u && u.id === myUser.id);
+    const stillHere = Object.values(lastSlots).some(
+      (u) => u && u.id === myUser.id
+    );
     if (!stillHere) {
       localCleanupAfterKick();
       socket.emit("get_room_state");
@@ -219,7 +250,9 @@ document.addEventListener("deviceready", () => {
   });
 
   socket.on("user_chat", ({ userId, message }) => {
-    const slotKey = Object.keys(lastSlots).find((s) => lastSlots[s]?.id === userId);
+    const slotKey = Object.keys(lastSlots).find(
+      (s) => lastSlots[s]?.id === userId
+    );
     if (!slotKey) return;
     showFloatingText(slotKey, message);
   });
@@ -240,7 +273,11 @@ document.addEventListener("deviceready", () => {
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        socket.emit("webrtc-offer", { toSocketId: p.socketId, fromSocketId: socket.id, sdp: pc.localDescription });
+        socket.emit("webrtc-offer", {
+          toSocketId: p.socketId,
+          fromSocketId: socket.id,
+          sdp: pc.localDescription,
+        });
       } catch (err) {
         console.warn("offer failed", err);
       }
@@ -255,7 +292,11 @@ document.addEventListener("deviceready", () => {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket.emit("webrtc-answer", { toSocketId: fromSocketId, fromSocketId: socket.id, sdp: pc.localDescription });
+      socket.emit("webrtc-answer", {
+        toSocketId: fromSocketId,
+        fromSocketId: socket.id,
+        sdp: pc.localDescription,
+      });
     } catch (err) {
       console.warn("handle offer failed", err);
     }
@@ -287,7 +328,9 @@ document.addEventListener("deviceready", () => {
   let lastSlots = {};
 
   function findSlotBySocketId(socketId) {
-    const key = Object.keys(lastSlots).find((s) => lastSlots[s]?.socketId === socketId);
+    const key = Object.keys(lastSlots).find(
+      (s) => lastSlots[s]?.socketId === socketId
+    );
     return key ? Number(key) : null;
   }
 
@@ -368,7 +411,10 @@ document.addEventListener("deviceready", () => {
         return;
       }
 
-      socket.emit("join_voice", { slot, user: { ...myUser, socketId: socket.id } });
+      socket.emit("join_voice", {
+        slot,
+        user: { ...myUser, socketId: socket.id },
+      });
       mySlot = slot;
       return;
     }
@@ -376,7 +422,10 @@ document.addEventListener("deviceready", () => {
     if (mySlot === slot) return;
 
     socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
-    socket.emit("join_voice", { slot, user: { ...myUser, socketId: socket.id } });
+    socket.emit("join_voice", {
+      slot,
+      user: { ...myUser, socketId: socket.id },
+    });
     mySlot = slot;
   }
 
@@ -425,21 +474,37 @@ document.addEventListener("deviceready", () => {
     }
     // close all peer connections
     for (const p in peers) {
-      try { peers[p].pc.close(); } catch (e) {}
+      try {
+        peers[p].pc.close();
+      } catch (e) {}
       delete peers[p];
     }
     // stop local stream
     if (localStream) {
-      try { localStream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+      try {
+        localStream.getTracks().forEach((t) => t.stop());
+      } catch (e) {}
       localStream = null;
     }
   }
+  document.getElementById("btnKeluar").onclick = () => {
+    if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+
+    try {
+      socket.close();
+    } catch (e) {}
+
+    localCleanupAfterKick();
+    location.reload();
+  };
 
   /* ===========================
       Cleanup on unload
      =========================== */
   window.addEventListener("beforeunload", () => {
     if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
-    try { socket.close(); } catch (e) {}
+    try {
+      socket.close();
+    } catch (e) {}
   });
 });
