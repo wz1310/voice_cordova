@@ -38,7 +38,7 @@ header {
 
 /* ======== Voice Grid ======== */
 .voice-grid {
-  margin-top: 75px;
+  margin-top: 95px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-gap: 20px;
@@ -121,16 +121,23 @@ header {
   border-radius: 10px;
   color: white;
   font-size: 13px;
-  white-space: nowrap;
+
+  white-space: normal;        /* IZINKAN teks turun ke baris baru */
+  word-wrap: break-word;      /* Patahkan kata panjang */
+  overflow-wrap: break-word;  /* Anti teks keluar bubble */
+
+  max-width: 140px;           /* Batasi lebar bubble agar tetap rapi */
+  text-align: center;         /* Tengah lebih bagus */
+
   pointer-events: none;
   z-index: 10;
 
-  /* Glow effect */
   box-shadow: 0 0 12px rgba(0,255,255,0.9), 0 0 20px rgba(0,255,255,0.7);
 
   opacity: 0;
   animation: fadeIn 0.15s forwards;
 }
+
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateX(-50%) translateY(5px); }
