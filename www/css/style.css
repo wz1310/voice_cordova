@@ -1,48 +1,79 @@
-/* ======== Layout Utama ======== */
+/* =========================================
+   Fix Tinggi Layar Mobile (Safari/Chrome)
+========================================= */
+html, body {
+  height: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+/* =========================================
+   Layout Utama & Background
+========================================= */
 body {
   margin: 0;
   padding: 0;
-  background: #131313;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+
+  background: url("../img/hutan.jpg") no-repeat center center;
+  background-size: cover;
+  background-attachment: scroll;
+
   font-family: Arial, sans-serif;
 }
 
+/* =========================================
+   Container & Main Layout
+========================================= */
 .container {
-  max-width: 500px;
-  margin: auto;
-  padding: 10px;
-  text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-header {
-  margin-bottom: 10px;
-}
-
-.host {
+main {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.host-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: #555;
+#chatContainer, #statusBar {
+  text-align: center;
+  width: 100%;
 }
 
-.host-label {
-  margin-top: 5px;
-  color: white;
-  font-size: 14px;
+footer {
+  margin-top: auto;
+  width: 100%;
 }
 
-/* ======== Voice Grid ======== */
+/* =========================================
+   Voice Grid (GRID RESPONSIVE)
+========================================= */
 .voice-grid {
   margin-top: 95px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-gap: 20px;
+  grid-gap: 30px;
   justify-items: center;
+}
+
+/* --- MOBILE FIX --- */
+@media (max-width: 700px) {
+  .voice-grid {
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .voice-grid {
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 18px;
+  }
 }
 
 .voice-slot {
@@ -51,7 +82,9 @@ header {
   height: 70px;
 }
 
-/* ======== Avatar Circle ======== */
+/* =========================================
+   Avatar Circle
+========================================= */
 .circle {
   width: 100%;
   height: 100%;
@@ -66,7 +99,9 @@ header {
   border: 2px dashed #555;
 }
 
-/* ======== Nama Slot ======== */
+/* =========================================
+   Nama Slot
+========================================= */
 .slot-name {
   margin-top: 4px;
   color: #ddd;
@@ -74,7 +109,9 @@ header {
   text-align: center;
 }
 
-/* ======== Mic Button ======== */
+/* =========================================
+   Tombol Mic & Kick
+========================================= */
 .mic-btn {
   position: absolute;
   bottom: -5px;
@@ -92,7 +129,6 @@ header {
   z-index: 3;
 }
 
-/* ======== Kick Button ======== */
 .kick-btn {
   position: absolute;
   top: -5px;
@@ -110,7 +146,9 @@ header {
   z-index: 3;
 }
 
-/* ======== Glow Chat Bubble ======== */
+/* =========================================
+   Floating Chat Bubble
+========================================= */
 .floating-text {
   position: absolute;
   bottom: 110%;
@@ -122,12 +160,12 @@ header {
   color: white;
   font-size: 13px;
 
-  white-space: normal;        /* IZINKAN teks turun ke baris baru */
-  word-wrap: break-word;      /* Patahkan kata panjang */
-  overflow-wrap: break-word;  /* Anti teks keluar bubble */
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 
-  max-width: 140px;           /* Batasi lebar bubble agar tetap rapi */
-  text-align: center;         /* Tengah lebih bagus */
+  max-width: 140px;
+  text-align: center;
 
   pointer-events: none;
   z-index: 10;
@@ -137,7 +175,6 @@ header {
   opacity: 0;
   animation: fadeIn 0.15s forwards;
 }
-
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateX(-50%) translateY(5px); }
@@ -153,11 +190,9 @@ header {
   to   { opacity: 0; transform: translateX(-50%) translateY(-5px); }
 }
 
-/* ======== Chat Input ======== */
-#chatContainer {
-  margin-top: 80px;
-}
-
+/* =========================================
+   Chat Input
+========================================= */
 #chatInput {
   width: 90%;
   padding: 10px;
@@ -172,13 +207,19 @@ header {
   color: #777;
 }
 
-/* ======== Status Bar ======== */
+/* =========================================
+   Status Bar
+========================================= */
 #statusBar {
-  margin-top: 20px;
-  color: #00ffaa;
+  margin-top: 5px;
+  color: #ffffff;
   font-weight: bold;
   font-size: 14px;
 }
+
+/* =========================================
+   Glow Bubble Chat
+========================================= */
 .chat-bubble-glow {
   position: absolute;
   top: -40px;
@@ -192,19 +233,45 @@ header {
   box-shadow: 0 0 12px rgba(0,255,200,0.75);
   opacity: 1;
   transform: translateY(0);
-  transition: all .4s ease;
+  transition: all 0.4s ease;
   pointer-events: none;
 }
+
+/* =========================================
+   Tombol Keluar + Icon
+========================================= */
 .keluar-btn {
   position: absolute;
   top: 10px;
   left: 10px;
   background: #000000aa;
-  padding: 6px 14px;
+  padding: 4px 6px;
   border-radius: 6px;
-  color: white;
-  border: 1px solid #00ffaa;
   cursor: pointer;
-  font-size: 13px;
   z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-out {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+/* =========================================
+   Mobile Tweaks Tambahan
+========================================= */
+@media (max-width: 480px) {
+  .voice-slot {
+    width: 60px;
+    height: 60px;
+  }
+  .slot-name {
+    font-size: 11px;
+  }
+  .mic-btn, .kick-btn {
+    transform: scale(0.9);
+  }
 }
