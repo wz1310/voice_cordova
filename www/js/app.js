@@ -518,14 +518,34 @@ document.addEventListener("deviceready", () => {
   const btnVolOn = document.getElementById("volumeon");
   const btnSilent = document.getElementById("silent");
 
+  // ============================
+  // FUNGSI MUTE / UNMUTE SUARA
+  // ============================
+
+  function muteAllUsers() {
+    const audios = document.querySelectorAll("audio");
+    audios.forEach((a) => (a.muted = true));
+  }
+
+  function unmuteAllUsers() {
+    const audios = document.querySelectorAll("audio");
+    audios.forEach((a) => (a.muted = false));
+  }
+
   btnVolOn.addEventListener("click", () => {
     btnVolOn.style.display = "none";
     btnSilent.style.display = "flex";
+
+    // MUTE SEMUA SUARA USER
+    muteAllUsers();
   });
 
   btnSilent.addEventListener("click", () => {
     btnSilent.style.display = "none";
     btnVolOn.style.display = "flex";
+
+    // UNMUTE SEMUA SUARA USER
+    unmuteAllUsers();
   });
 
   /* ===========================

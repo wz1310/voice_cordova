@@ -5,8 +5,6 @@ const { Server } = require("socket.io");
 const twilio = require("twilio");
 
 // === Ganti dengan SID dan AUTH token Twilio mu (ENV recommended) ===
-const TWILIO_SID = process.env.TWILIO_SID || "AC450e442565433adc3daefeab1155b172";
-const TWILIO_AUTH = process.env.TWILIO_AUTH || "e182ece0abf38347f1d8265ed311296c";
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
