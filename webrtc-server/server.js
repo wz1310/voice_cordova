@@ -5,6 +5,10 @@ const { Server } = require("socket.io");
 const twilio = require("twilio");
 
 // === Ganti dengan SID dan AUTH token Twilio mu (ENV recommended) ===
+const TWILIO_SID =
+  process.env.TWILIO_SID || "AC450e442565433adc3daefeab1155b172";
+const TWILIO_AUTH =
+  process.env.TWILIO_AUTH || "19780bcdb59a4ae2a8895bc48db4d9be";
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
@@ -198,7 +202,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 6000;
+const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Voice server running on port ${PORT}`);
 });

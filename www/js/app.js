@@ -8,7 +8,7 @@ document.addEventListener("deviceready", () => {
   const chatInput = document.getElementById("chatInput");
 
   // gunakan URL signaling / server yang sama
-  const SIGNALING_URL = "https://c1jx4415-6000.asse.devtunnels.ms";
+  const SIGNALING_URL = "https://c1jx4415-4000.asse.devtunnels.ms";
 
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
