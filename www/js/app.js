@@ -6,7 +6,8 @@ document.addEventListener("deviceready", () => {
   const statusBar = document.getElementById("statusBar");
   const chatInput = document.getElementById("chatInput");
 
-  const SIGNALING_URL = "https://c1jx4415-5000.asse.devtunnels.ms";
+  // gunakan URL signaling / server yang sama
+  const SIGNALING_URL = "https://c1jx4415-6000.asse.devtunnels.ms";
 
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
@@ -26,27 +27,47 @@ document.addEventListener("deviceready", () => {
   const peers = {};
   let localStream = null;
 
-  // STUN + TURN (TURN: metered public relay)
-  const RTC_CONFIG = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      {
-        urls: ["turn:global.relay.metered.ca:80"],
-        username: "openai",
-        credential: "openai",
-      },
-      {
-        urls: ["turn:global.relay.metered.ca:443"],
-        username: "openai",
-        credential: "openai",
-      },
-      {
-        urls: ["turn:global.relay.metered.ca:443?transport=tcp"],
-        username: "openai",
-        credential: "openai",
-      },
-    ],
+  // Default minimal RTC config (STUN only) — akan di-overwrite dengan Twilio ICE bila tersedia
+  let RTC_CONFIG = {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   };
+
+  /* ===========================
+     Fetch Twilio ICE from server
+     =========================== */
+  async function getTwilioIce() {
+    try {
+      const base = SIGNALING_URL.replace(/\/$/, "");
+      const resp = await fetch(base + "/turn-token", { method: "GET" });
+      if (!resp.ok)
+        throw new Error("turn-token request failed: " + resp.status);
+      const data = await resp.json();
+      // Twilio returns ice_servers or iceServers array on token
+      const iceArr = data.ice_servers || data.iceServers || data.iceServers;
+      if (!Array.isArray(iceArr) || iceArr.length === 0) {
+        console.warn("No ice_servers from Twilio token");
+        return RTC_CONFIG.iceServers;
+      }
+      // normalize
+      const normalized = iceArr.map((s) => {
+        const entry = {};
+        // Twilio may return urls as string; allow both string or array
+        if (s.urls) entry.urls = s.urls;
+        else if (s.url) entry.urls = s.url;
+        else if (s.servers) entry.urls = s.servers;
+        // username / credential optional
+        if (s.username) entry.username = s.username;
+        if (s.credential) entry.credential = s.credential;
+        if (s.password && !entry.credential) entry.credential = s.password;
+        return entry;
+      });
+      console.log("ICE FINAL FROM TWILIO:", normalized); // <--- TAMBAHKAN LOG INI
+      return normalized;
+    } catch (err) {
+      console.warn("getTwilioIce failed:", err);
+      return RTC_CONFIG.iceServers;
+    }
+  }
 
   /* ===========================
       Create slots (UI)
@@ -86,9 +107,7 @@ document.addEventListener("deviceready", () => {
 
       // Unlock autoplay on first user interaction
       const unlock = () => {
-        audio.play().catch(() => {
-          /* ignore */
-        });
+        audio.play().catch(() => {});
         document.body.removeEventListener("click", unlock);
         document.body.removeEventListener("touchstart", unlock);
       };
@@ -154,7 +173,6 @@ document.addEventListener("deviceready", () => {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    // debug logs
     pc.onconnectionstatechange = () =>
       console.debug("PC state", peerSocketId, pc.connectionState);
     pc.oniceconnectionstatechange = () =>
@@ -170,14 +188,12 @@ document.addEventListener("deviceready", () => {
       const [stream] = evt.streams;
       if (audioEl) {
         audioEl.srcObject = stream;
-        // try to play (some browsers require user gesture; we attempted to unlock earlier)
         audioEl.play().catch(() => {});
       }
     };
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        // helpful debug to check for relay candidates
         try {
           if ((event.candidate.candidate || "").includes("typ relay"))
             console.debug("Emitting relay candidate for", peerSocketId);
@@ -197,8 +213,24 @@ document.addEventListener("deviceready", () => {
   /* ===========================
       SOCKET EVENTS (signaling + room)
      =========================== */
-  socket.on("connect", () => {
+  socket.on("connect", async () => {
     statusBar.innerText = "Connected";
+
+    // ambil ICE TURN Twilio (dari server `/turn-token`)
+    try {
+      const iceServers = await getTwilioIce();
+      if (Array.isArray(iceServers) && iceServers.length > 0) {
+        RTC_CONFIG.iceServers = iceServers;
+        console.log("RTC_CONFIG updated with Twilio ICE servers");
+      } else {
+        console.warn("Twilio returned empty ice servers, using defaults");
+      }
+    } catch (err) {
+      console.warn("Failed to get Twilio ICE, using default RTC_CONFIG", err);
+    }
+
+    console.log("Final RTC CONFIG:", RTC_CONFIG);
+
     socket.emit("identify", myUser);
     socket.emit("get_room_state");
   });
@@ -235,7 +267,6 @@ document.addEventListener("deviceready", () => {
     if (micBtn) micBtn.innerText = status === "on" ? "🎤" : "🔇";
   });
 
-  // defensive update_slots handler (server might emit for some reason)
   socket.on("update_slots", (newSlots) => {
     console.log("update_slots received", newSlots);
     lastSlots = newSlots || {};
@@ -258,11 +289,34 @@ document.addEventListener("deviceready", () => {
   });
 
   if (chatInput) {
-    chatInput.addEventListener("keyup", () => {
-      if (!mySlot) return;
-      const text = chatInput.value;
-      showFloatingText(mySlot, text);
-      socket.emit("user_chat", { userId: myUser.id, message: text });
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!mySlot) return;
+        const text = chatInput.value.trim();
+        if (!text) return;
+        socket.emit("user_chat", { userId: myUser.id, message: text });
+        showFloatingText(mySlot, text);
+        chatInput.value = "";
+        chatInput.blur(); // close keyboard on mobile after send
+      }
+    });
+
+    // prevent auto-focusing that steals view on mobile
+    chatInput.addEventListener("focus", () => {
+      // optional: scroll chat into view if needed, or do nothing to avoid auto-scroll
+      // window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    // optional: blur when touching outside
+    document.addEventListener("touchstart", (ev) => {
+      if (!chatInput) return;
+      if (
+        !ev.target.closest("#chatContainer") &&
+        document.activeElement === chatInput
+      ) {
+        chatInput.blur();
+      }
     });
   }
 
@@ -335,8 +389,13 @@ document.addEventListener("deviceready", () => {
   }
 
   function updateAllSlots(slots) {
-    for (let i = 1; i <= NUM_SLOTS; i++) clearSlotUI(i);
-    for (const s in slots) updateSlotUI(s, slots[s]);
+    for (let i = 1; i <= NUM_SLOTS; i++) {
+      if (!slots[i]) {
+        clearSlotUI(i);
+      } else {
+        updateSlotUI(i, slots[i]);
+      }
+    }
   }
 
   function updateSlotUI(slot, user) {
@@ -442,7 +501,7 @@ document.addEventListener("deviceready", () => {
       slotDiv.appendChild(bubble);
     }
     bubble.innerText = text;
-    if (!text) {
+    if (text === null || text === undefined) {
       bubble.classList.add("fade-out");
       setTimeout(() => bubble.remove(), 300);
       return;
@@ -455,31 +514,40 @@ document.addEventListener("deviceready", () => {
     }, 4000);
   }
 
+  // Toggle Volume On / Silent
+  const btnVolOn = document.getElementById("volumeon");
+  const btnSilent = document.getElementById("silent");
+
+  btnVolOn.addEventListener("click", () => {
+    btnVolOn.style.display = "none";
+    btnSilent.style.display = "flex";
+  });
+
+  btnSilent.addEventListener("click", () => {
+    btnSilent.style.display = "none";
+    btnVolOn.style.display = "flex";
+  });
+
   /* ===========================
       Kick handling: client side
      =========================== */
   socket.on("kicked", () => {
-    // only target receives this event
     alert("Anda telah dikeluarkan dari room.");
-    // local cleanup and request authoritative state
     localCleanupAfterKick();
     socket.emit("get_room_state");
   });
 
   function localCleanupAfterKick() {
-    // remove my slot in UI
     if (mySlot) {
       clearSlotUI(mySlot);
       mySlot = null;
     }
-    // close all peer connections
     for (const p in peers) {
       try {
         peers[p].pc.close();
       } catch (e) {}
       delete peers[p];
     }
-    // stop local stream
     if (localStream) {
       try {
         localStream.getTracks().forEach((t) => t.stop());
@@ -487,20 +555,16 @@ document.addEventListener("deviceready", () => {
       localStream = null;
     }
   }
+
   document.getElementById("btnKeluar").onclick = () => {
     if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
-
     try {
       socket.close();
     } catch (e) {}
-
     localCleanupAfterKick();
     location.reload();
   };
 
-  /* ===========================
-      Cleanup on unload
-     =========================== */
   window.addEventListener("beforeunload", () => {
     if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
     try {

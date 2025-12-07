@@ -2,6 +2,13 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const twilio = require("twilio");
+
+// === Ganti dengan SID dan AUTH token Twilio mu (ENV recommended) ===
+const TWILIO_SID = process.env.TWILIO_SID || "AC450e442565433adc3daefeab1155b172";
+const TWILIO_AUTH = process.env.TWILIO_AUTH || "e182ece0abf38347f1d8265ed311296c";
+
+const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
 const app = express();
 const server = http.createServer(app);
@@ -14,7 +21,23 @@ app.use((req, res, next) => {
   next();
 });
 
-// Socket.IO: polling (DevTunnel) for stability
+// small health endpoint
+app.get("/", (req, res) => res.send("Voice server alive"));
+
+// Twilio NTS token endpoint
+app.get("/turn-token", async (req, res) => {
+  try {
+    // twilio.tokens.create() returns object with ice_servers (or iceServers)
+    const token = await twilioClient.tokens.create();
+    // return the token object directly (client will read ice_servers)
+    res.json(token);
+  } catch (err) {
+    console.error("Twilio Error:", err && err.message ? err.message : err);
+    res.status(500).json({ error: "twilio_failed", message: err.message || String(err) });
+  }
+});
+
+// Socket.IO: polling for DevTunnel stability
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"], allowedHeaders: ["*"] },
   transports: ["polling"],
@@ -118,7 +141,7 @@ io.on("connection", (socket) => {
     io.emit("user_chat", { userId, message });
   });
 
-  // kick user (only remove target user and notify)
+  // kick user
   socket.on("kick_user", ({ userId }) => {
     console.log("Kick requested for:", userId);
 
@@ -130,27 +153,23 @@ io.on("connection", (socket) => {
         kickedSlot = Number(s);
         kickedSocketId = slots[s].socketId;
         delete slots[s];
-        break; // user IDs unique, stop after found
+        break;
       }
     }
 
     if (kickedSlot !== null) {
-      // notify everyone slot emptied (clients handle UI update)
       io.emit("user_left_voice", { slot: kickedSlot });
     } else {
-      // defensive: send update_slots if nothing found
       io.emit("update_slots", slots);
     }
 
     if (kickedSocketId) {
-      // send 'kicked' only to target socket
       io.to(kickedSocketId).emit("kicked");
       console.log("Sent 'kicked' to:", kickedSocketId);
-      // NOTE: we do not forcibly disconnect server-side here to allow client cleanup flow.
     }
   });
 
-  // ---------------- WebRTC signaling ----------------
+  // WebRTC signaling
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
     if (!toSocketId) return;
     io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
@@ -178,6 +197,7 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(5000, () => {
-  console.log("Voice server running on port 5000");
+const PORT = process.env.PORT || 6000;
+server.listen(PORT, () => {
+  console.log(`Voice server running on port ${PORT}`);
 });
