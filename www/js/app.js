@@ -1,6 +1,7 @@
 // app.js (final)
 document.addEventListener("deviceready", () => {
   console.log("Cordova Ready!");
+  let isMuted = false;
 
   const voiceGrid = document.getElementById("voiceGrid");
   const statusBar = document.getElementById("statusBar");
@@ -100,10 +101,15 @@ document.addEventListener("deviceready", () => {
       audio.setAttribute("data-peer", peerSocketId);
       audio.autoplay = true;
       audio.playsInline = true;
-      audio.muted = false;
+      audio.muted = isMuted ? true : false;
       audio.volume = 1.0;
       audio.style.display = "none";
       circle.appendChild(audio);
+
+      // 🔥 Pastikan audio baru ikut mute jika sedang silent
+      if (isMuted) {
+        audio.muted = true;
+      }
 
       // Unlock autoplay on first user interaction
       const unlock = () => {
@@ -184,11 +190,13 @@ document.addEventListener("deviceready", () => {
     const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
 
     pc.ontrack = (evt) => {
-      console.debug("ontrack from", peerSocketId, evt.streams);
       const [stream] = evt.streams;
       if (audioEl) {
         audioEl.srcObject = stream;
-        audioEl.play().catch(() => {});
+
+        if (!isMuted) {
+          audioEl.play().catch(() => {});
+        }
       }
     };
 
@@ -264,7 +272,10 @@ document.addEventListener("deviceready", () => {
 
   socket.on("mic_status_changed", ({ slot, status }) => {
     const micBtn = document.getElementById(`mic-${slot}`);
-    if (micBtn) micBtn.innerText = status === "on" ? "🎤" : "🔇";
+    if (micBtn) {
+      micBtn.textContent = status === "on" ? "🎤" : "🔇";
+      micBtn.style.opacity = "1.0"; // tampil jelas
+    }
   });
 
   socket.on("update_slots", (newSlots) => {
@@ -415,11 +426,15 @@ document.addEventListener("deviceready", () => {
       };
     }
 
-    micBtn.style.display = user.id === myUser.id ? "flex" : "none";
+    micBtn.style.display = "flex";
     micBtn.innerText = user.mic === "on" ? "🎤" : "🔇";
     micBtn.onclick = (e) => {
       e.stopPropagation();
-      toggleMyMic();
+
+      // hanya bisa klik mic slot sendiri
+      if (user.id === myUser.id) {
+        toggleMyMic();
+      }
     };
 
     let label = circle.parentNode.querySelector(".slot-name");
@@ -454,8 +469,19 @@ document.addEventListener("deviceready", () => {
     if (!localStream) return;
     const track = localStream.getAudioTracks()[0];
     track.enabled = !track.enabled;
+
     myUser.mic = track.enabled ? "on" : "off";
-    socket.emit("toggle_mic", { slot: mySlot, userId: myUser.id });
+
+    // 🔥 kirim status mic yang baru
+    socket.emit("toggle_mic", {
+      slot: mySlot,
+      userId: myUser.id, // <--- WAJIB DITAMBAHKAN
+      status: myUser.mic,
+    });
+
+    // update tampilan mic saya sendiri
+    const myMicBtn = document.getElementById(`mic-${mySlot}`);
+    if (myMicBtn) myMicBtn.innerText = myUser.mic === "on" ? "🎤" : "🔇";
   }
 
   /* ===========================
@@ -536,7 +562,7 @@ document.addEventListener("deviceready", () => {
     btnVolOn.style.display = "none";
     btnSilent.style.display = "flex";
 
-    // MUTE SEMUA SUARA USER
+    isMuted = true; // <-- aktifkan mute global
     muteAllUsers();
   });
 
@@ -544,7 +570,7 @@ document.addEventListener("deviceready", () => {
     btnSilent.style.display = "none";
     btnVolOn.style.display = "flex";
 
-    // UNMUTE SEMUA SUARA USER
+    isMuted = false; // <-- nonaktifkan mute global
     unmuteAllUsers();
   });
 

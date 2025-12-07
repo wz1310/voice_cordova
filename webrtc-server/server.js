@@ -31,7 +31,9 @@ app.get("/turn-token", async (req, res) => {
     res.json(token);
   } catch (err) {
     console.error("Twilio Error:", err && err.message ? err.message : err);
-    res.status(500).json({ error: "twilio_failed", message: err.message || String(err) });
+    res
+      .status(500)
+      .json({ error: "twilio_failed", message: err.message || String(err) });
   }
 });
 
@@ -103,7 +105,8 @@ io.on("connection", (socket) => {
     const existing = [];
     for (const s in slots) {
       const u = slots[s];
-      if (u.socketId && u.socketId !== socket.id) existing.push({ slot: Number(s), socketId: u.socketId });
+      if (u.socketId && u.socketId !== socket.id)
+        existing.push({ slot: Number(s), socketId: u.socketId });
     }
     io.to(socket.id).emit("existing_peers", existing);
 
@@ -119,10 +122,10 @@ io.on("connection", (socket) => {
   });
 
   // toggle mic
-  socket.on("toggle_mic", ({ slot, userId }) => {
+  socket.on("toggle_mic", ({ slot, userId, status }) => {
     if (slots[slot] && slots[slot].id === userId) {
-      slots[slot].mic = slots[slot].mic === "on" ? "off" : "on";
-      io.emit("mic_status_changed", { slot, status: slots[slot].mic });
+      slots[slot].mic = status;
+      io.emit("mic_status_changed", { slot, status });
     }
   });
 
