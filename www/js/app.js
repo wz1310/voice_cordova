@@ -1,14 +1,15 @@
-// app.js (final)
+// app.js (final updated)
 document.addEventListener("deviceready", () => {
   console.log("Cordova Ready!");
   let isMuted = false;
+  let screenStream = null;
 
   const voiceGrid = document.getElementById("voiceGrid");
   const statusBar = document.getElementById("statusBar");
   const chatInput = document.getElementById("chatInput");
+  const btnScreenShare = document.getElementById("btnScreenShare");
 
-  // gunakan URL signaling / server yang sama
-  const SIGNALING_URL = "https://c1jx4415-4000.asse.devtunnels.ms";
+  const SIGNALING_URL = "https://m3h048qq-4000.asse.devtunnels.ms";
 
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
@@ -28,13 +29,104 @@ document.addEventListener("deviceready", () => {
   const peers = {};
   let localStream = null;
 
-  // Default minimal RTC config (STUN only) — akan di-overwrite dengan Twilio ICE bila tersedia
-  let RTC_CONFIG = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-  };
+  let RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+  function removeScreenShare(peerSocketId) {
+    const container = document.getElementById("screenShareContainer");
+    const video = container.querySelector(`video[data-peer="${peerSocketId}"]`);
+    if (video) {
+      video.srcObject = null;
+      video.remove();
+    }
+    if (container.children.length === 0) {
+      container.style.display = "none";
+    }
+  }
 
   /* ===========================
-     Fetch Twilio ICE from server
+       Screen Share
+     =========================== */
+  btnScreenShare.addEventListener("click", async () => {
+    const screenContainer = document.getElementById("screenShareContainer");
+
+    if (!mySlot) {
+      alert("Join slot dulu sebelum share screen!");
+      return;
+    }
+
+    if (screenStream) {
+      await stopScreenShare();
+      return;
+    }
+
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      screenContainer.style.display = "flex";
+
+      for (const peerId in peers) {
+        const pc = peers[peerId].pc;
+        screenStream
+          .getTracks()
+          .forEach((track) => pc.addTrack(track, screenStream));
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("webrtc-offer", {
+          toSocketId: peerId,
+          fromSocketId: socket.id,
+          sdp: pc.localDescription,
+        });
+      }
+
+      btnScreenShare.style.background = "#0f0";
+
+      screenStream.getVideoTracks()[0].onended = async () => {
+        await stopScreenShare();
+      };
+
+      console.log("Screen sharing started");
+    } catch (err) {
+      console.warn("Screen share gagal", err);
+    }
+  });
+
+  async function stopScreenShare() {
+    if (!screenStream) return;
+
+    // Broadcast ke semua peer bahwa screen share dihentikan
+    for (const peerId in peers) {
+      socket.emit("stop_screen_share", {
+        toSocketId: peerId,
+        fromSocketId: socket.id,
+      });
+
+      const pc = peers[peerId].pc;
+      pc.getSenders().forEach((sender) => {
+        if (screenStream.getTracks().includes(sender.track)) {
+          pc.removeTrack(sender);
+        }
+      });
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("webrtc-offer", {
+        toSocketId: peerId,
+        fromSocketId: socket.id,
+        sdp: pc.localDescription,
+      });
+    }
+
+    screenStream.getTracks().forEach((t) => t.stop());
+    screenStream = null;
+    btnScreenShare.style.background = "";
+
+    const screenContainer = document.getElementById("screenShareContainer");
+    screenContainer.style.display = "none";
+  }
+
+  /* ===========================
+       Fetch Twilio ICE
      =========================== */
   async function getTwilioIce() {
     try {
@@ -43,27 +135,19 @@ document.addEventListener("deviceready", () => {
       if (!resp.ok)
         throw new Error("turn-token request failed: " + resp.status);
       const data = await resp.json();
-      // Twilio returns ice_servers or iceServers array on token
-      const iceArr = data.ice_servers || data.iceServers || data.iceServers;
-      if (!Array.isArray(iceArr) || iceArr.length === 0) {
-        console.warn("No ice_servers from Twilio token");
+      const iceArr = data.ice_servers || data.iceServers || [];
+      if (!Array.isArray(iceArr) || iceArr.length === 0)
         return RTC_CONFIG.iceServers;
-      }
-      // normalize
-      const normalized = iceArr.map((s) => {
+      return iceArr.map((s) => {
         const entry = {};
-        // Twilio may return urls as string; allow both string or array
         if (s.urls) entry.urls = s.urls;
         else if (s.url) entry.urls = s.url;
         else if (s.servers) entry.urls = s.servers;
-        // username / credential optional
         if (s.username) entry.username = s.username;
         if (s.credential) entry.credential = s.credential;
         if (s.password && !entry.credential) entry.credential = s.password;
         return entry;
       });
-      console.log("ICE FINAL FROM TWILIO:", normalized); // <--- TAMBAHKAN LOG INI
-      return normalized;
     } catch (err) {
       console.warn("getTwilioIce failed:", err);
       return RTC_CONFIG.iceServers;
@@ -71,51 +155,38 @@ document.addEventListener("deviceready", () => {
   }
 
   /* ===========================
-      Create slots (UI)
+       Create slots UI
      =========================== */
   for (let i = 1; i <= NUM_SLOTS; i++) {
     const div = document.createElement("div");
     div.className = "voice-slot";
     div.id = "slot" + i;
-
     div.innerHTML = `
       <div class="kick-btn" id="kick-${i}">x</div>
       <div class="mic-btn" id="mic-${i}">🎤</div>
       <div class="circle empty"></div>
     `;
-
     div.addEventListener("click", () => handleSlotClick(i));
     voiceGrid.appendChild(div);
   }
 
   /* ===========================
-      AUDIO ELEMENT CREATION (autoplay unlock)
+       Audio Element
      =========================== */
   function createRemoteAudioElement(peerSocketId, slot) {
     const circle = document.querySelector(`#slot${slot} .circle`);
     if (!circle) return null;
-
     let audio = circle.querySelector(`audio[data-peer="${peerSocketId}"]`);
     if (!audio) {
       audio = document.createElement("audio");
       audio.setAttribute("data-peer", peerSocketId);
       audio.autoplay = true;
       audio.playsInline = true;
-      audio.muted = isMuted ? true : false;
-      audio.volume = 1.0;
+      audio.muted = isMuted;
       audio.style.display = "none";
       circle.appendChild(audio);
-
-      // 🔥 Pastikan audio baru ikut mute jika sedang silent
-      if (isMuted) {
-        audio.muted = true;
-      }
-
-      // Unlock autoplay on first user interaction
       const unlock = () => {
         audio.play().catch(() => {});
-        document.body.removeEventListener("click", unlock);
-        document.body.removeEventListener("touchstart", unlock);
       };
       document.body.addEventListener("click", unlock, { once: true });
       document.body.addEventListener("touchstart", unlock, { once: true });
@@ -125,8 +196,7 @@ document.addEventListener("deviceready", () => {
 
   async function startLocalStream() {
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-      return s;
+      return await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       alert("Tidak bisa mengakses microphone.");
       throw err;
@@ -134,84 +204,89 @@ document.addEventListener("deviceready", () => {
   }
 
   /* ===========================
-      MIC VISUALIZER
+       Mic Visualizer
      =========================== */
   function startMicVisualizer(stream) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
-
     source.connect(analyser);
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
     let lastSpeaking = false;
-
     function loop() {
       analyser.getByteFrequencyData(dataArray);
       const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
       const speaking = avg > 10;
-
       if (mySlot) {
         const myCircle = document.querySelector(`#slot${mySlot} .circle`);
-        if (myCircle) {
+        if (myCircle)
           myCircle.style.boxShadow = speaking
             ? "0 0 20px rgba(0,255,100,0.9)"
             : "none";
-        }
       }
-
       if (speaking !== lastSpeaking) {
         lastSpeaking = speaking;
         socket.emit("user_speaking", { userId: myUser.id, speaking });
       }
-
       requestAnimationFrame(loop);
     }
     loop();
   }
 
   /* ===========================
-      Peer connection
+       Peer Connection
      =========================== */
   function createPeerConnection(peerSocketId, remoteSlot, localStream) {
     if (peers[peerSocketId]) return peers[peerSocketId].pc;
-
     const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    if (localStream)
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
+
+    pc.ontrack = (evt) => {
+      const [stream] = evt.streams;
+      const trackKind = evt.track.kind;
+
+      if (trackKind === "video") {
+        const container = document.getElementById("screenShareContainer");
+        container.style.display = "flex";
+
+        let video = container.querySelector(
+          `video[data-peer="${peerSocketId}"]`
+        );
+        if (!video) {
+          video = document.createElement("video");
+          video.setAttribute("data-peer", peerSocketId);
+          video.autoplay = true;
+          video.playsInline = true;
+          video.muted = false;
+          container.appendChild(video);
+        }
+        video.srcObject = stream;
+        video.play().catch(() => {});
+      } else if (trackKind === "audio") {
+        const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
+        if (audioEl) {
+          audioEl.srcObject = stream;
+          if (!isMuted) audioEl.play().catch(() => {});
+        }
+      }
+    };
 
     pc.onconnectionstatechange = () =>
       console.debug("PC state", peerSocketId, pc.connectionState);
     pc.oniceconnectionstatechange = () =>
       console.debug("ICE state", peerSocketId, pc.iceConnectionState);
 
-    if (localStream)
-      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
-
-    const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
-
-    pc.ontrack = (evt) => {
-      const [stream] = evt.streams;
-      if (audioEl) {
-        audioEl.srcObject = stream;
-
-        if (!isMuted) {
-          audioEl.play().catch(() => {});
-        }
-      }
-    };
-
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        try {
-          if ((event.candidate.candidate || "").includes("typ relay"))
-            console.debug("Emitting relay candidate for", peerSocketId);
-        } catch (e) {}
+      if (event.candidate)
         socket.emit("webrtc-ice", {
           toSocketId: peerSocketId,
           fromSocketId: socket.id,
           candidate: event.candidate,
         });
-      }
     };
 
     peers[peerSocketId] = { pc, audioEl, slot: remoteSlot };
@@ -253,7 +328,31 @@ document.addEventListener("deviceready", () => {
     updateSlotUI(slot, user);
   });
 
+  socket.on("stop_screen_share", ({ fromSocketId }) => {
+    const container = document.getElementById("screenShareContainer");
+    const video = container.querySelector(`video[data-peer="${fromSocketId}"]`);
+    if (video) {
+      video.srcObject = null;
+      video.remove();
+    }
+
+    // Jika container kosong, sembunyikan
+    if (container.children.length === 0) {
+      container.style.display = "none";
+    }
+  });
+
   socket.on("user_left_voice", ({ slot }) => {
+    const user = lastSlots[slot];
+    if (user?.socketId) {
+      // hapus video screen share yang mungkin tersisa
+      const container = document.getElementById("screenShareContainer");
+      const video = container.querySelector(
+        `video[data-peer="${user.socketId}"]`
+      );
+      if (video) video.remove();
+      if (container.children.length === 0) container.style.display = "none";
+    }
     delete lastSlots[slot];
     clearSlotUI(slot);
   });

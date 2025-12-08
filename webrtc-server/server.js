@@ -5,6 +5,8 @@ const { Server } = require("socket.io");
 const twilio = require("twilio");
 
 // === Ganti dengan SID dan AUTH token Twilio mu (ENV recommended) ===
+const TWILIO_SID = "AC450e442565433adc3daefeab1155b172"; // SID Twilio mu
+const TWILIO_AUTH = "19780bcdb59a4ae2a8895bc48db4d9be"; // Auth Token Twilio mu
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
@@ -57,6 +59,17 @@ const slots = {}; // e.g. slots[1] = { id:'u123', name:'User', avatar:'...', mic
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
+
+  // User menghentikan screen share
+  socket.on("stop_screen_share", ({ toSocketId, fromSocketId }) => {
+    if (toSocketId) {
+      // Kirim ke user target
+      io.to(toSocketId).emit("stop_screen_share", { fromSocketId });
+    } else {
+      // Jika tidak ada target spesifik, broadcast ke semua kecuali sender
+      socket.broadcast.emit("stop_screen_share", { fromSocketId });
+    }
+  });
 
   // optional identify
   socket.on("identify", (user) => {
