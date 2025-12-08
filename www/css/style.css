@@ -347,3 +347,7 @@ footer {
   height: 16px;
   object-fit: contain;
 }
+
+.fullscreen-btn:hover {
+  background: rgba(0,0,0,0.6);
+}

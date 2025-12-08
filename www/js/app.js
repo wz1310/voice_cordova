@@ -9,6 +9,44 @@ document.addEventListener("deviceready", () => {
   const chatInput = document.getElementById("chatInput");
   const btnScreenShare = document.getElementById("btnScreenShare");
 
+  // ==============================
+  // Tambahkan fungsi manual close
+  // ==============================
+  function addManualCloseButton(container) {
+    if (container.querySelector(".manual-close-btn")) return;
+
+    const btnClose = document.createElement("button");
+    btnClose.innerText = "✖";
+    btnClose.className = "manual-close-btn";
+    btnClose.style.position = "absolute";
+    btnClose.style.top = "5px";
+    btnClose.style.left = "5px";
+    btnClose.style.zIndex = "1000";
+    btnClose.style.background = "rgba(0,0,0,0.3)";
+    btnClose.style.color = "#fff";
+    btnClose.style.border = "none";
+    btnClose.style.borderRadius = "4px";
+    btnClose.style.padding = "4px 6px";
+    btnClose.style.cursor = "pointer";
+
+    btnClose.onclick = () => {
+      const videos = container.querySelectorAll("video");
+      videos.forEach((v) => {
+        v.srcObject = null;
+        v.remove();
+      });
+      container.style.display = "none";
+      if (screenStream) {
+        screenStream.getTracks().forEach((t) => t.stop());
+        screenStream = null;
+        btnScreenShare.style.background = "";
+      }
+    };
+
+    container.style.position = "relative";
+    container.appendChild(btnClose);
+  }
+
   const SIGNALING_URL = "https://m3h048qq-4000.asse.devtunnels.ms";
 
   const socket = io(SIGNALING_URL, {
@@ -263,6 +301,36 @@ document.addEventListener("deviceready", () => {
           video.playsInline = true;
           video.muted = false;
           container.appendChild(video);
+
+          // ======= Tombol fullscreen =======
+          const btnFull = document.createElement("button");
+          btnFull.innerText = "⛶"; // icon fullscreen
+          btnFull.className = "fullscreen-btn";
+          btnFull.style.position = "absolute";
+          btnFull.style.top = "5px";
+          btnFull.style.right = "5px";
+          btnFull.style.zIndex = "1000";
+          btnFull.style.background = "rgba(0,0,0,0.3)";
+          btnFull.style.color = "#fff";
+          btnFull.style.border = "none";
+          btnFull.style.borderRadius = "4px";
+          btnFull.style.padding = "4px 6px";
+          btnFull.style.cursor = "pointer";
+
+          btnFull.onclick = () => {
+            if (!document.fullscreenElement) {
+              video.requestFullscreen().catch((err) => {
+                console.warn("Fullscreen gagal:", err);
+              });
+            } else {
+              document.exitFullscreen().catch(() => {});
+            }
+          };
+
+          video.parentNode.style.position = "relative"; // supaya tombol posisi absolute
+          video.parentNode.appendChild(btnFull);
+          // ======= End fullscreen =======
+          addManualCloseButton(container);
         }
         video.srcObject = stream;
         video.play().catch(() => {});
