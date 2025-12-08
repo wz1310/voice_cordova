@@ -102,10 +102,10 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // assign slot
+    // assign slot — gunakan status mic dari client jika ada, default "on"
     slots[slot] = {
       ...user,
-      mic: "on",
+      mic: user && user.mic ? user.mic : "on",
       slot: Number(slot),
       socketId: socket.id,
       speaking: false,

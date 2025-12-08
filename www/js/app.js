@@ -234,7 +234,12 @@ document.addEventListener("deviceready", () => {
 
   async function startLocalStream() {
     try {
-      return await navigator.mediaDevices.getUserMedia({ audio: true });
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // pastikan track mengikuti myUser.mic (default "on")
+      const desired = myUser.mic === "on";
+      const t = s.getAudioTracks()[0];
+      if (t) t.enabled = desired;
+      return s;
     } catch (err) {
       alert("Tidak bisa mengakses microphone.");
       throw err;
@@ -725,20 +730,55 @@ document.addEventListener("deviceready", () => {
     audios.forEach((a) => (a.muted = false));
   }
 
-  btnVolOn.addEventListener("click", () => {
+  btnVolOn.addEventListener("click", async () => {
+    // from volume-on -> go silent (mute mic)
     btnVolOn.style.display = "none";
     btnSilent.style.display = "flex";
 
-    isMuted = true; // <-- aktifkan mute global
+    isMuted = true; // tetap untuk mute incoming audio
     muteAllUsers();
+
+    // jika ada localStream, matikan track mic dan update server/myUser
+    if (localStream && localStream.getAudioTracks().length) {
+      const t = localStream.getAudioTracks()[0];
+      t.enabled = false;
+      myUser.mic = "off";
+      if (mySlot) {
+        socket.emit("toggle_mic", {
+          slot: mySlot,
+          userId: myUser.id,
+          status: myUser.mic,
+        });
+      }
+    } else {
+      // kalau belum ada localStream, tandai status; saat nanti startLocalStream dipanggil,
+      // kita akan menonaktifkan track sesuai myUser.mic
+      myUser.mic = "off";
+    }
   });
 
-  btnSilent.addEventListener("click", () => {
+  btnSilent.addEventListener("click", async () => {
+    // from silent -> volume on (unmute mic)
     btnSilent.style.display = "none";
     btnVolOn.style.display = "flex";
 
-    isMuted = false; // <-- nonaktifkan mute global
+    isMuted = false;
     unmuteAllUsers();
+
+    if (localStream && localStream.getAudioTracks().length) {
+      const t = localStream.getAudioTracks()[0];
+      t.enabled = true;
+      myUser.mic = "on";
+      if (mySlot) {
+        socket.emit("toggle_mic", {
+          slot: mySlot,
+          userId: myUser.id,
+          status: myUser.mic,
+        });
+      }
+    } else {
+      myUser.mic = "on";
+    }
   });
 
   /* ===========================
