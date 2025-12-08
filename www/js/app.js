@@ -731,30 +731,17 @@ document.addEventListener("deviceready", () => {
   }
 
   btnVolOn.addEventListener("click", async () => {
-    // from volume-on -> go silent (mute mic)
+    // from volume-on -> go silent (mute incoming audio)
     btnVolOn.style.display = "none";
     btnSilent.style.display = "flex";
 
-    isMuted = true; // tetap untuk mute incoming audio
+    isMuted = true;
     muteAllUsers();
 
-    // jika ada localStream, matikan track mic dan update server/myUser
-    if (localStream && localStream.getAudioTracks().length) {
-      const t = localStream.getAudioTracks()[0];
-      t.enabled = false;
-      myUser.mic = "off";
-      if (mySlot) {
-        socket.emit("toggle_mic", {
-          slot: mySlot,
-          userId: myUser.id,
-          status: myUser.mic,
-        });
-      }
-    } else {
-      // kalau belum ada localStream, tandai status; saat nanti startLocalStream dipanggil,
-      // kita akan menonaktifkan track sesuai myUser.mic
-      myUser.mic = "off";
-    }
+    // ⚠️ Jangan sentuh mic!
+    // Tidak boleh disable track audio
+    // Tidak boleh ubah myUser.mic
+    // Tidak boleh emit toggle_mic
   });
 
   btnSilent.addEventListener("click", async () => {
