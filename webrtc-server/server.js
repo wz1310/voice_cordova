@@ -1,19 +1,25 @@
-// server.js
+// ==================================================
+//  Imports & Setup
+// ==================================================
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const twilio = require("twilio");
 
-// === Ganti dengan SID dan AUTH token Twilio mu (ENV recommended) ===
-const TWILIO_SID = "AC450e442565433adc3daefeab1155b172"; // SID Twilio mu
-const TWILIO_AUTH = "19780bcdb59a4ae2a8895bc48db4d9be"; // Auth Token Twilio mu
+// --------------------------------------------------
+//  Twilio Credentials (gunakan ENV pada production)
+// --------------------------------------------------
+const TWILIO_SID = "AC450e442565433adc3daefeab1155b172";
+const TWILIO_AUTH = "19780bcdb59a4ae2a8895bc48db4d9be";
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
 const app = express();
 const server = http.createServer(app);
 
-// CORS minimal (DevTunnel friendly)
+// ==================================================
+//  CORS (DevTunnel Friendly)
+// ==================================================
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
@@ -21,141 +27,170 @@ app.use((req, res, next) => {
   next();
 });
 
-// small health endpoint
-app.get("/", (req, res) => res.send("Voice server alive"));
+// ==================================================
+//  Basic Health Check
+// ==================================================
+app.get("/", (req, res) => {
+  res.send("Voice server alive");
+});
 
-// Twilio NTS token endpoint
+// ==================================================
+//  Twilio TURN Token Endpoint
+// ==================================================
 app.get("/turn-token", async (req, res) => {
   try {
-    // twilio.tokens.create() returns object with ice_servers (or iceServers)
     const token = await twilioClient.tokens.create();
-    // return the token object directly (client will read ice_servers)
     res.json(token);
   } catch (err) {
-    console.error("Twilio Error:", err && err.message ? err.message : err);
-    res
-      .status(500)
-      .json({ error: "twilio_failed", message: err.message || String(err) });
+    console.error("Twilio Error:", err.message || err);
+    res.status(500).json({
+      error: "twilio_failed",
+      message: err.message || String(err),
+    });
   }
 });
 
-// Socket.IO: polling for DevTunnel stability
+// ==================================================
+//  Socket.IO Configuration
+// ==================================================
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"], allowedHeaders: ["*"] },
-  transports: ["polling"],
+  transports: ["polling"], // Lebih stabil untuk DevTunnel
   allowEIO3: true,
 });
 
-// Force engine to send CORS on polling endpoints
+// Inject CORS ke polling header Socket.IO
 io.engine.on("headers", (headers) => {
   headers["Access-Control-Allow-Origin"] = "*";
   headers["Access-Control-Allow-Credentials"] = "false";
   headers["Access-Control-Allow-Headers"] = "*";
 });
 
-// ROOM STATE: slotNumber -> user object
+// ==================================================
+//  Voice Room State
+// ==================================================
 const NUM_SLOTS = 8;
-const slots = {}; // e.g. slots[1] = { id:'u123', name:'User', avatar:'...', mic:'on', slot:1, socketId:'...' }
+const slots = {}; 
+// Example: slots[1] = { id, name, mic, slot, socketId, speaking }
 
+// ==================================================
+//  Socket.IO Events
+// ==================================================
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // User menghentikan screen share
+  // ----------------------------
+  //  Screen Share Stopped
+  // ----------------------------
   socket.on("stop_screen_share", ({ toSocketId, fromSocketId }) => {
     if (toSocketId) {
-      // Kirim ke user target
       io.to(toSocketId).emit("stop_screen_share", { fromSocketId });
     } else {
-      // Jika tidak ada target spesifik, broadcast ke semua kecuali sender
       socket.broadcast.emit("stop_screen_share", { fromSocketId });
     }
   });
 
-  // optional identify
+  // ----------------------------
+  //  Identity Attach
+  // ----------------------------
   socket.on("identify", (user) => {
     socket.data.user = user;
   });
 
-  // get full room state
+  // ----------------------------
+  //  Get Room State
+  // ----------------------------
   socket.on("get_room_state", () => {
     io.to(socket.id).emit("room_state", { slots });
   });
 
-  // join voice slot
+  // ----------------------------
+  //  Join Voice Slot
+  // ----------------------------
   socket.on("join_voice", ({ slot, user }) => {
     if (typeof slot !== "number" || slot < 1 || slot > NUM_SLOTS) {
       socket.emit("join_failed", { slot, reason: "invalid_slot" });
       return;
     }
 
-    // remove user from previous slot (if any)
+    // Remove dari slot sebelumnya
     for (const s in slots) {
-      if (slots[s] && slots[s].id === user.id) {
+      if (slots[s]?.id === user.id) {
         delete slots[s];
         io.emit("user_left_voice", { slot: Number(s) });
       }
     }
 
-    // if slot occupied by different user -> fail
+    // Slot dipakai user lain
     if (slots[slot] && slots[slot].id !== user.id) {
       socket.emit("join_failed", { slot, reason: "occupied" });
       return;
     }
 
-    // assign slot — gunakan status mic dari client jika ada, default "on"
+    // Assign user ke slot
     slots[slot] = {
       ...user,
-      mic: user && user.mic ? user.mic : "on",
+      mic: user.mic || "on",
       slot: Number(slot),
       socketId: socket.id,
       speaking: false,
     };
 
-    // notify all clients
     io.emit("user_joined_voice", { slot, user: slots[slot] });
 
-    // prepare existing peers list for the new joiner
-    const existing = [];
-    for (const s in slots) {
-      const u = slots[s];
-      if (u.socketId && u.socketId !== socket.id)
-        existing.push({ slot: Number(s), socketId: u.socketId });
-    }
+    // Kirim daftar peer lain ke user yang baru join
+    const existing = Object.keys(slots)
+      .filter((s) => slots[s].socketId !== socket.id)
+      .map((s) => ({
+        slot: Number(s),
+        socketId: slots[s].socketId,
+      }));
+
     io.to(socket.id).emit("existing_peers", existing);
 
     console.log("User joined slot:", slot, slots[slot]);
   });
 
-  // leave voice slot
+  // ----------------------------
+  //  Leave Voice
+  // ----------------------------
   socket.on("leave_voice", ({ slot, userId }) => {
-    if (slots[slot] && slots[slot].id === userId) {
+    if (slots[slot]?.id === userId) {
       delete slots[slot];
       io.emit("user_left_voice", { slot });
     }
   });
 
-  // toggle mic
+  // ----------------------------
+  //  Toggle Mic
+  // ----------------------------
   socket.on("toggle_mic", ({ slot, userId, status }) => {
-    if (slots[slot] && slots[slot].id === userId) {
+    if (slots[slot]?.id === userId) {
       slots[slot].mic = status;
       io.emit("mic_status_changed", { slot, status });
     }
   });
 
-  // user speaking indicator (broadcast to others)
+  // ----------------------------
+  //  Speaking Indicator
+  // ----------------------------
   socket.on("user_speaking", ({ userId, speaking }) => {
     for (const s in slots) {
-      if (slots[s] && slots[s].id === userId) slots[s].speaking = speaking;
+      if (slots[s]?.id === userId) slots[s].speaking = speaking;
     }
     socket.broadcast.emit("user_speaking", { userId, speaking });
   });
 
-  // user chat (typing / live text)
+  // ----------------------------
+  //  Live Chat (Text)
+  // ----------------------------
   socket.on("user_chat", ({ userId, message }) => {
     io.emit("user_chat", { userId, message });
   });
 
-  // kick user
+  // ----------------------------
+  //  Kick User
+  // ----------------------------
   socket.on("kick_user", ({ userId }) => {
     console.log("Kick requested for:", userId);
 
@@ -163,7 +198,7 @@ io.on("connection", (socket) => {
     let kickedSocketId = null;
 
     for (const s in slots) {
-      if (slots[s] && slots[s].id === userId) {
+      if (slots[s]?.id === userId) {
         kickedSlot = Number(s);
         kickedSocketId = slots[s].socketId;
         delete slots[s];
@@ -183,27 +218,29 @@ io.on("connection", (socket) => {
     }
   });
 
-  // WebRTC signaling
+  // ----------------------------
+  //  WebRTC Signaling
+  // ----------------------------
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (!toSocketId) return;
-    io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-answer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (!toSocketId) return;
-    io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-ice", ({ toSocketId, candidate, fromSocketId }) => {
-    if (!toSocketId) return;
-    io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
   });
 
-  // disconnect cleanup
+  // ----------------------------
+  //  Disconnect Cleanup
+  // ----------------------------
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
+
     for (const s in slots) {
-      if (slots[s] && slots[s].socketId === socket.id) {
+      if (slots[s]?.socketId === socket.id) {
         delete slots[s];
         io.emit("user_left_voice", { slot: Number(s) });
       }
@@ -211,6 +248,9 @@ io.on("connection", (socket) => {
   });
 });
 
+// ==================================================
+//  Server Start
+// ==================================================
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Voice server running on port ${PORT}`);
