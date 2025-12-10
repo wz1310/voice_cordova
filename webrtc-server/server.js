@@ -10,7 +10,7 @@ const twilio = require("twilio");
 //  Twilio Credentials (gunakan ENV pada production)
 // --------------------------------------------------
 const TWILIO_SID = "AC450e442565433adc3daefeab1155b172";
-const TWILIO_AUTH = "a58b1391ecf34c18f9e4bbfffa180255";
+const TWILIO_AUTH = "4513557fba41d18bdc6bf67bb17ea8b7";
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 

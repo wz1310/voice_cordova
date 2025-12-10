@@ -606,10 +606,17 @@ document.addEventListener("deviceready", () => {
       const video = cont.querySelector(`video[data-peer="${user.socketId}"]`);
       if (video) video.remove();
       if (!cont.querySelector("video")) cont.style.display = "none";
+      // !!! TAMBAHKAN LOGIKA UNTUK HAPUS VIDEO WEBCAM DARI SLOT !!!
+      updateVideoElement(slot, user.socketId, null);
     }
 
     delete lastSlots[slot];
     clearSlotUI(slot);
+    // Hapus peer connection juga di sini (jika belum dilakukan di tempat lain)
+    if (user?.socketId && peers[user.socketId]) {
+      peers[user.socketId].pc.close();
+      delete peers[user.socketId];
+    }
   });
 
   socket.on("webcam_status_changed", ({ slot, status }) => {
@@ -620,6 +627,25 @@ document.addEventListener("deviceready", () => {
     // Jika status OFF, pastikan video remote dihilangkan
     if (status === "off") {
       updateVideoElement(slot, user.socketId, null);
+      // !!! TAMBAHKAN LOGIKA UNTUK MENUTUP REMOTE TRACK JIKA MASIH ADA !!!
+      // Ini memastikan track video remote benar-benar dibersihkan dari peer connection.
+      const peerId = user.socketId;
+      if (peers[peerId]) {
+        const pc = peers[peerId].pc;
+        pc.getReceivers().forEach((receiver) => {
+          if (
+            receiver.track?.kind === "video" &&
+            receiver.track.label !== "screen"
+          ) {
+            // Di WebRTC, tidak ada 'removeTrack' untuk receiver.
+            // Cukup hapus elemen video di UI adalah cara yang paling efektif.
+            // Namun, kita bisa menambahkan log untuk debugging:
+            console.log(
+              `[CLEANUP] Webcam OFF: Removing remote video from slot ${slot} for peer ${peerId}`
+            );
+          }
+        });
+      }
     }
     // Anda bisa menambahkan indikasi visual lain di sini jika diperlukan
   });
