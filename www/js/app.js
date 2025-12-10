@@ -4,6 +4,7 @@ document.addEventListener("deviceready", () => {
 
   let isMuted = false;
   let screenStream = null;
+  let webcamStream = null; // <-- TAMBAHAN
   let mySlot = null;
   let localStream = null;
 
@@ -17,12 +18,14 @@ document.addEventListener("deviceready", () => {
   const statusBar = document.getElementById("statusBar");
   const chatInput = document.getElementById("chatInput");
   const btnScreenShare = document.getElementById("btnScreenShare");
+  const btnWebcam = document.getElementById("btnWebcam"); // <-- TAMBAHAN
 
   const myUser = {
     id: "u" + Math.floor(Math.random() * 999999),
     name: "User " + Math.floor(Math.random() * 99),
     avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=" + Math.random(),
-    mic: "on"
+    mic: "on",
+    webcam: "off", // <-- TAMBAHAN
   };
 
   /* =========================================================
@@ -44,12 +47,12 @@ document.addEventListener("deviceready", () => {
       border: "none",
       borderRadius: "4px",
       padding: "4px 6px",
-      cursor: "pointer"
+      cursor: "pointer",
     });
 
     btn.onclick = () => {
       const vids = container.querySelectorAll("video");
-      vids.forEach(v => {
+      vids.forEach((v) => {
         v.srcObject = null;
         v.remove();
       });
@@ -57,7 +60,7 @@ document.addEventListener("deviceready", () => {
       container.style.display = "none";
 
       if (screenStream) {
-        screenStream.getTracks().forEach(t => t.stop());
+        screenStream.getTracks().forEach((t) => t.stop());
         screenStream = null;
         btnScreenShare.style.background = "";
       }
@@ -104,10 +107,147 @@ document.addEventListener("deviceready", () => {
 
   function findSlotBySocketId(socketId) {
     const key = Object.keys(lastSlots).find(
-      s => lastSlots[s]?.socketId === socketId
+      (s) => lastSlots[s]?.socketId === socketId
     );
     return key ? Number(key) : null;
   }
+
+  /* =========================================================
+      WEBCAM HANDLERS <-- BARU
+  ========================================================= */
+
+  async function startWebcamStream() {
+    if (!mySlot) return alert("Join slot dulu sebelum mengaktifkan kamera!");
+
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      webcamStream = s;
+      btnWebcam.style.background = "#0f0";
+
+      // 1. Tampilkan video lokal di slot sendiri
+      updateVideoElement(mySlot, socket.id, webcamStream, true);
+
+      // 2. Kirim track video ke semua peer
+      for (const peerId in peers) {
+        const pc = peers[peerId].pc;
+        webcamStream
+          .getVideoTracks()
+          .forEach((t) => pc.addTrack(t, webcamStream));
+
+        // Negosiasi ulang (Offer/Answer)
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        socket.emit("webrtc-offer", {
+          toSocketId: peerId,
+          fromSocketId: socket.id,
+          sdp: pc.localDescription,
+        });
+      }
+
+      // 3. Update status di server
+      myUser.webcam = "on";
+      socket.emit("toggle_webcam", {
+        slot: mySlot,
+        userId: myUser.id,
+        status: myUser.webcam,
+      });
+    } catch (err) {
+      console.warn("Webcam gagal", err);
+      alert("Tidak bisa mengakses kamera.");
+      btnWebcam.style.background = "";
+      webcamStream = null;
+      myUser.webcam = "off";
+    }
+  }
+
+  async function stopWebcamStream() {
+    if (!webcamStream) return;
+
+    // 1. Hapus video lokal
+    updateVideoElement(mySlot, socket.id, null, true);
+
+    // 2. Hentikan track
+    webcamStream.getTracks().forEach((t) => t.stop());
+    webcamStream = null;
+    btnWebcam.style.background = "";
+
+    // 3. Hapus track dari peer connections
+    for (const peerId in peers) {
+      const pc = peers[peerId].pc;
+
+      pc.getSenders().forEach((sender) => {
+        // Hapus track yang jenisnya video dan BUKAN screen
+        if (sender.track?.kind === "video" && sender.track.label !== "screen") {
+          pc.removeTrack(sender);
+        }
+      });
+
+      // Negosiasi ulang
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit("webrtc-offer", {
+        toSocketId: peerId,
+        fromSocketId: socket.id,
+        sdp: pc.localDescription,
+      });
+    }
+
+    // 4. Update status di server
+    myUser.webcam = "off";
+    socket.emit("toggle_webcam", {
+      slot: mySlot,
+      userId: myUser.id,
+      status: myUser.webcam,
+    });
+  }
+
+  function updateVideoElement(slot, peerSocketId, stream, isLocal = false) {
+    const slotDiv = document.getElementById(`slot${slot}`);
+    if (!slotDiv) return;
+
+    let container = slotDiv.querySelector(".video-container");
+
+    if (stream) {
+      if (!container) {
+        container = document.createElement("div");
+        container.className = "video-container";
+        // Tambahkan sebelum .circle agar muncul di atas avatar
+        slotDiv.insertBefore(container, slotDiv.querySelector(".circle"));
+      }
+
+      let video = container.querySelector(`video[data-peer="${peerSocketId}"]`);
+
+      if (!video) {
+        video = document.createElement("video");
+        video.dataset.peer = peerSocketId;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = isLocal; // Mute video lokal
+        video.style.transform = isLocal ? "scaleX(-1)" : "none"; // Mirror lokal
+        container.appendChild(video);
+      }
+
+      video.srcObject = stream;
+    } else if (container) {
+      // Hapus video/container jika stream null
+      const video = container.querySelector(
+        `video[data-peer="${peerSocketId}"]`
+      );
+      if (video) video.remove();
+
+      // Hapus container jika sudah tidak ada video di dalamnya
+      if (!container.querySelector("video")) container.remove();
+    }
+  }
+
+  // Listener Tombol Webcam
+  btnWebcam.addEventListener("click", async () => {
+    if (!mySlot) return alert("Join slot dulu sebelum mengaktifkan kamera!");
+    if (webcamStream) return stopWebcamStream();
+    return startWebcamStream();
+  });
 
   /* =========================================================
       SCREEN SHARE
@@ -121,14 +261,34 @@ document.addEventListener("deviceready", () => {
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true
+        audio: true,
       });
+      // 1. KIRIM SINYAL KE SEMUA PEER SEBELUM ADDTRACK
+      socket.emit("start_screen_share_signal", {
+        fromSocketId: socket.id,
+      });
+
+      // --- TAMPILKAN VIDEO LOKAL DI CONTAINER BAWAH ---
+      const videoEl = document.createElement("video");
+      videoEl.id = "localScreenVideo";
+      videoEl.autoplay = true;
+      videoEl.playsInline = true;
+      videoEl.muted = true; // Video lokal harus di-mute
+      videoEl.style.width = "100%";
+      videoEl.style.height = "100%";
+      videoEl.style.objectFit = "contain";
+      videoEl.srcObject = screenStream;
+
+      // Hapus video sebelumnya jika ada (misal dari peer lain)
+      screenContainer.innerHTML = "";
+      screenContainer.appendChild(videoEl);
+      addManualCloseButton(screenContainer); // Tambahkan tombol close
 
       screenContainer.style.display = "flex";
 
       for (const peerId in peers) {
         const pc = peers[peerId].pc;
-        screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
+        screenStream.getTracks().forEach((t) => pc.addTrack(t, screenStream));
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -136,7 +296,7 @@ document.addEventListener("deviceready", () => {
         socket.emit("webrtc-offer", {
           toSocketId: peerId,
           fromSocketId: socket.id,
-          sdp: pc.localDescription
+          sdp: pc.localDescription,
         });
       }
 
@@ -145,7 +305,6 @@ document.addEventListener("deviceready", () => {
       screenStream.getVideoTracks()[0].onended = async () => {
         await stopScreenShare();
       };
-
     } catch (err) {
       console.warn("Screen share gagal", err);
     }
@@ -159,10 +318,10 @@ document.addEventListener("deviceready", () => {
 
       socket.emit("stop_screen_share", {
         toSocketId: peerId,
-        fromSocketId: socket.id
+        fromSocketId: socket.id,
       });
 
-      pc.getSenders().forEach(sender => {
+      pc.getSenders().forEach((sender) => {
         if (screenStream.getTracks().includes(sender.track)) {
           pc.removeTrack(sender);
         }
@@ -174,15 +333,19 @@ document.addEventListener("deviceready", () => {
       socket.emit("webrtc-offer", {
         toSocketId: peerId,
         fromSocketId: socket.id,
-        sdp: pc.localDescription
+        sdp: pc.localDescription,
       });
     }
 
-    screenStream.getTracks().forEach(t => t.stop());
+    screenStream.getTracks().forEach((t) => t.stop());
     screenStream = null;
 
     btnScreenShare.style.background = "";
-    document.getElementById("screenShareContainer").style.display = "none";
+    // --- HAPUS TAMPILAN LOKAL SCREEN SHARE ---
+    const screenContainer = document.getElementById("screenShareContainer");
+    screenContainer.innerHTML = ""; // Bersihkan semua konten
+    screenContainer.style.display = "none";
+    // ------------------------------------------
   }
 
   /* =========================================================
@@ -200,10 +363,10 @@ document.addEventListener("deviceready", () => {
       if (!Array.isArray(iceArr) || iceArr.length === 0)
         return RTC_CONFIG.iceServers;
 
-      return iceArr.map(s => ({
+      return iceArr.map((s) => ({
         urls: s.urls || s.url || s.servers,
         username: s.username,
-        credential: s.credential || s.password
+        credential: s.credential || s.password,
       }));
     } catch (err) {
       console.warn("getTwilioIce failed", err);
@@ -247,8 +410,10 @@ document.addEventListener("deviceready", () => {
 
       if (mySlot) {
         const myCircle = document.querySelector(`#slot${mySlot} .circle`);
-        if (myCircle) myCircle.style.boxShadow =
-          speaking ? "0 0 20px rgba(0,255,100,0.9)" : "none";
+        if (myCircle)
+          myCircle.style.boxShadow = speaking
+            ? "0 0 20px rgba(0,255,100,0.9)"
+            : "none";
       }
 
       if (speaking !== lastSpeaking) {
@@ -271,59 +436,91 @@ document.addEventListener("deviceready", () => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
     if (localStream)
-      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+
+    // Tambahkan stream webcam lokal jika aktif
+    if (webcamStream)
+      webcamStream.getTracks().forEach((t) => pc.addTrack(t, webcamStream)); // <-- BARU
 
     const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
 
-    pc.ontrack = evt => {
+    pc.ontrack = (evt) => {
       const stream = evt.streams[0];
       const kind = evt.track.kind;
+      const track = evt.track;
+
+      // --- DEBUG LOGGING TAMBAHAN ---
+      console.log(`[ONTRACK] Peer: ${peerSocketId}`);
+      console.log(
+        `[ONTRACK] Kind: ${kind}, Label: ${track.label}, ID: ${track.id}`
+      );
+      // -----------------------------
 
       if (kind === "video") {
         const container = document.getElementById("screenShareContainer");
-        container.style.display = "flex";
+        const isSharing =
+          peers[peerSocketId] && peers[peerSocketId].isSharingScreen;
+        const isScreenShare = track.label.includes("screen") || isSharing;
 
-        let video = container.querySelector(
-          `video[data-peer="${peerSocketId}"]`
-        );
+        console.log(`[ONTRACK] Peer Flag Is Sharing? ${isSharing}`);
+        console.log(`[ONTRACK] Is Screen Share? ${isScreenShare}`);
 
-        if (!video) {
-          video = document.createElement("video");
-          video.dataset.peer = peerSocketId;
-          video.autoplay = true;
-          video.playsInline = true;
+        if (isScreenShare) {
+          // --- PENANGANAN SCREEN SHARE (ke container bawah) ---
+          container.style.display = "flex";
 
-          container.appendChild(video);
+          let video = container.querySelector(
+            `video[data-peer="${peerSocketId}"]`
+          );
 
-          const btnFull = document.createElement("button");
-          btnFull.innerText = "⛶";
-          btnFull.className = "fullscreen-btn";
+          if (!video) {
+            video = document.createElement("video");
+            video.dataset.peer = peerSocketId;
+            video.autoplay = true;
+            video.playsInline = true;
 
-          Object.assign(btnFull.style, {
-            position: "absolute",
-            top: "5px",
-            right: "5px",
-            zIndex: "1000",
-            background: "rgba(0,0,0,0.3)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "4px",
-            padding: "4px 6px",
-            cursor: "pointer"
-          });
+            // Tambahkan video ke container
+            container.appendChild(video);
 
-          btnFull.onclick = () =>
-            !document.fullscreenElement
-              ? video.requestFullscreen().catch(() => {})
-              : document.exitFullscreen().catch(() => {});
+            // Tambahkan tombol fullscreen/close jika belum ada video screen share lain.
+            // Kita hanya perlu satu set tombol control untuk seluruh container.
+            if (!container.querySelector(".fullscreen-btn")) {
+              const btnFull = document.createElement("button");
+              btnFull.innerText = "⛶";
+              btnFull.className = "fullscreen-btn";
 
-          video.parentNode.style.position = "relative";
-          video.parentNode.appendChild(btnFull);
+              Object.assign(btnFull.style, {
+                position: "absolute",
+                top: "5px",
+                right: "5px",
+                zIndex: "1000",
+                background: "rgba(0,0,0,0.3)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                padding: "4px 6px",
+                cursor: "pointer",
+              });
 
-          addManualCloseButton(container);
+              btnFull.onclick = () =>
+                !document.fullscreenElement
+                  ? video.requestFullscreen().catch(() => {})
+                  : document.exitFullscreen().catch(() => {});
+
+              container.style.position = "relative";
+              container.appendChild(btnFull);
+              addManualCloseButton(container);
+            }
+          }
+          // Set stream ke video screen share
+          video.srcObject = stream;
+
+          // Hapus video webcam jika ada dari user ini (misalnya screen share aktif, webcam harus hilang dari slot)
+          updateVideoElement(remoteSlot, peerSocketId, null);
+        } else {
+          // --- PENANGANAN VIDEO WEBCAM (ke avatar slot) ---
+          updateVideoElement(remoteSlot, peerSocketId, stream);
         }
-
-        video.srcObject = stream;
       }
 
       if (kind === "audio") {
@@ -335,12 +532,12 @@ document.addEventListener("deviceready", () => {
       }
     };
 
-    pc.onicecandidate = e => {
+    pc.onicecandidate = (e) => {
       if (e.candidate)
         socket.emit("webrtc-ice", {
           toSocketId: peerSocketId,
           fromSocketId: socket.id,
-          candidate: e.candidate
+          candidate: e.candidate,
         });
     };
 
@@ -354,7 +551,17 @@ document.addEventListener("deviceready", () => {
   const socket = io(SIGNALING_URL, {
     transports: ["polling"],
     upgrade: false,
-    forceNew: true
+    forceNew: true,
+  });
+
+  socket.on("start_screen_share_signal", ({ fromSocketId }) => {
+    if (peers[fromSocketId]) {
+      // Set flag di objek peer
+      peers[fromSocketId].isSharingScreen = true;
+      console.log(
+        `[SIGNAL] Peer ${fromSocketId} is now marked as sharing screen.`
+      );
+    }
   });
 
   socket.on("connect", async () => {
@@ -382,6 +589,11 @@ document.addEventListener("deviceready", () => {
   socket.on("stop_screen_share", ({ fromSocketId }) => {
     const container = document.getElementById("screenShareContainer");
     const video = container.querySelector(`video[data-peer="${fromSocketId}"]`);
+
+    if (peers[fromSocketId]) {
+      peers[fromSocketId].isSharingScreen = false; // Reset flag saat berhenti
+      console.log(`[SIGNAL] Peer ${fromSocketId} is no longer sharing screen.`);
+    }
     if (video) video.remove();
     if (!container.querySelector("video")) container.style.display = "none";
   });
@@ -400,15 +612,28 @@ document.addEventListener("deviceready", () => {
     clearSlotUI(slot);
   });
 
+  socket.on("webcam_status_changed", ({ slot, status }) => {
+    // <-- BARU
+    const user = lastSlots[slot];
+    if (user) user.webcam = status;
+
+    // Jika status OFF, pastikan video remote dihilangkan
+    if (status === "off") {
+      updateVideoElement(slot, user.socketId, null);
+    }
+    // Anda bisa menambahkan indikasi visual lain di sini jika diperlukan
+  });
+
   socket.on("user_speaking", ({ userId, speaking }) => {
     const slot = Object.keys(lastSlots).find(
-      s => lastSlots[s]?.id === userId
+      (s) => lastSlots[s]?.id === userId
     );
 
     const circle = document.querySelector(`#slot${slot} .circle`);
     if (circle) {
-      circle.style.boxShadow =
-        speaking ? "0 0 30px rgba(0,255,150,0.9)" : "none";
+      circle.style.boxShadow = speaking
+        ? "0 0 30px rgba(0,255,150,0.9)"
+        : "none";
     }
   });
 
@@ -420,13 +645,11 @@ document.addEventListener("deviceready", () => {
     }
   });
 
-  socket.on("update_slots", newSlots => {
+  socket.on("update_slots", (newSlots) => {
     lastSlots = newSlots || {};
     updateAllSlots(lastSlots);
 
-    const stillHere = Object.values(lastSlots).some(
-      u => u?.id === myUser.id
-    );
+    const stillHere = Object.values(lastSlots).some((u) => u?.id === myUser.id);
 
     if (!stillHere) {
       localCleanupAfterKick();
@@ -436,12 +659,12 @@ document.addEventListener("deviceready", () => {
 
   socket.on("user_chat", ({ userId, message }) => {
     const slot = Object.keys(lastSlots).find(
-      s => lastSlots[s]?.id === userId
+      (s) => lastSlots[s]?.id === userId
     );
     showFloatingText(slot, message);
   });
 
-  socket.on("existing_peers", async existing => {
+  socket.on("existing_peers", async (existing) => {
     if (!localStream) localStream = await startLocalStream();
 
     for (const p of existing) {
@@ -452,7 +675,7 @@ document.addEventListener("deviceready", () => {
       socket.emit("webrtc-offer", {
         toSocketId: p.socketId,
         fromSocketId: socket.id,
-        sdp: pc.localDescription
+        sdp: pc.localDescription,
       });
     }
   });
@@ -470,7 +693,7 @@ document.addEventListener("deviceready", () => {
     socket.emit("webrtc-answer", {
       toSocketId: fromSocketId,
       fromSocketId: socket.id,
-      sdp: pc.localDescription
+      sdp: pc.localDescription,
     });
   });
 
@@ -504,7 +727,7 @@ document.addEventListener("deviceready", () => {
 
     kickBtn.style.display = user.id !== myUser.id ? "flex" : "none";
     if (user.id !== myUser.id) {
-      kickBtn.onclick = e => {
+      kickBtn.onclick = (e) => {
         e.stopPropagation();
         socket.emit("kick_user", { userId: user.id });
       };
@@ -513,7 +736,7 @@ document.addEventListener("deviceready", () => {
     micBtn.style.display = "flex";
     micBtn.innerText = user.mic === "on" ? "🎤" : "🔇";
 
-    micBtn.onclick = e => {
+    micBtn.onclick = (e) => {
       e.stopPropagation();
       if (user.id === myUser.id) toggleMyMic();
     };
@@ -555,7 +778,7 @@ document.addEventListener("deviceready", () => {
 
       socket.emit("join_voice", {
         slot,
-        user: { ...myUser, socketId: socket.id }
+        user: { ...myUser, socketId: socket.id },
       });
 
       mySlot = slot;
@@ -567,7 +790,7 @@ document.addEventListener("deviceready", () => {
     socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
     socket.emit("join_voice", {
       slot,
-      user: { ...myUser, socketId: socket.id }
+      user: { ...myUser, socketId: socket.id },
     });
 
     mySlot = slot;
@@ -586,7 +809,7 @@ document.addEventListener("deviceready", () => {
     socket.emit("toggle_mic", {
       slot: mySlot,
       userId: myUser.id,
-      status: myUser.mic
+      status: myUser.mic,
     });
 
     const btn = document.getElementById(`mic-${mySlot}`);
@@ -625,7 +848,7 @@ document.addEventListener("deviceready", () => {
   }
 
   if (chatInput) {
-    chatInput.addEventListener("keydown", e => {
+    chatInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
 
       e.preventDefault();
@@ -642,7 +865,7 @@ document.addEventListener("deviceready", () => {
       chatInput.blur();
     });
 
-    document.addEventListener("touchstart", ev => {
+    document.addEventListener("touchstart", (ev) => {
       if (
         chatInput &&
         !ev.target.closest("#chatContainer") &&
@@ -660,11 +883,11 @@ document.addEventListener("deviceready", () => {
   const btnSilent = document.getElementById("silent");
 
   function muteAllUsers() {
-    document.querySelectorAll("audio").forEach(a => (a.muted = true));
+    document.querySelectorAll("audio").forEach((a) => (a.muted = true));
   }
 
   function unmuteAllUsers() {
-    document.querySelectorAll("audio").forEach(a => (a.muted = false));
+    document.querySelectorAll("audio").forEach((a) => (a.muted = false));
   }
 
   btnVolOn.addEventListener("click", () => {
@@ -691,7 +914,7 @@ document.addEventListener("deviceready", () => {
         socket.emit("toggle_mic", {
           slot: mySlot,
           userId: myUser.id,
-          status: myUser.mic
+          status: myUser.mic,
         });
       }
     }
@@ -709,6 +932,8 @@ document.addEventListener("deviceready", () => {
   function localCleanupAfterKick() {
     if (mySlot) {
       clearSlotUI(mySlot);
+      // Hapus video lokal dari slot
+      updateVideoElement(mySlot, socket.id, null, true); // <-- BARU
       mySlot = null;
     }
 
@@ -721,15 +946,25 @@ document.addEventListener("deviceready", () => {
 
     if (localStream) {
       try {
-        localStream.getTracks().forEach(t => t.stop());
+        localStream.getTracks().forEach((t) => t.stop());
       } catch {}
       localStream = null;
     }
+    // Cleanup Webcam BARU
+    if (webcamStream) {
+      try {
+        webcamStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      webcamStream = null;
+    }
+    btnWebcam.style.background = ""; // <-- BARU
   }
 
   document.getElementById("btnKeluar").onclick = () => {
-    if (mySlot)
-      socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+    if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+
+    // Hentikan Webcam jika aktif
+    if (webcamStream) stopWebcamStream(); // <-- BARU
 
     try {
       socket.close();
@@ -740,8 +975,10 @@ document.addEventListener("deviceready", () => {
   };
 
   window.addEventListener("beforeunload", () => {
-    if (mySlot)
-      socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+    if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+
+    // Hentikan Webcam jika aktif
+    if (webcamStream) stopWebcamStream(); // <-- BARU
 
     try {
       socket.close();

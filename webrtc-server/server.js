@@ -10,7 +10,7 @@ const twilio = require("twilio");
 //  Twilio Credentials (gunakan ENV pada production)
 // --------------------------------------------------
 const TWILIO_SID = "AC450e442565433adc3daefeab1155b172";
-const TWILIO_AUTH = "19780bcdb59a4ae2a8895bc48db4d9be";
+const TWILIO_AUTH = "a58b1391ecf34c18f9e4bbfffa180255";
 
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH);
 
@@ -70,7 +70,7 @@ io.engine.on("headers", (headers) => {
 //  Voice Room State
 // ==================================================
 const NUM_SLOTS = 8;
-const slots = {}; 
+const slots = {};
 // Example: slots[1] = { id, name, mic, slot, socketId, speaking }
 
 // ==================================================
@@ -78,6 +78,18 @@ const slots = {};
 // ==================================================
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
+
+  // ----------------------------
+  //  Screen Share Started <-- BARU
+  // ----------------------------
+  socket.on("start_screen_share_signal", ({ fromSocketId }) => {
+    // Kirim sinyal ke semua client lain KECUALI pengirim (User A)
+    socket.broadcast.emit("start_screen_share_signal", {
+      fromSocketId: fromSocketId, // Pastikan menggunakan ID pengirim dari klien
+    });
+
+    console.log(`[SIGNAL] Screen share signal sent by: ${fromSocketId}`);
+  });
 
   // ----------------------------
   //  Screen Share Stopped
@@ -131,6 +143,7 @@ io.on("connection", (socket) => {
     slots[slot] = {
       ...user,
       mic: user.mic || "on",
+      webcam: user.webcam || "off",
       slot: Number(slot),
       socketId: socket.id,
       speaking: false,
@@ -168,6 +181,16 @@ io.on("connection", (socket) => {
     if (slots[slot]?.id === userId) {
       slots[slot].mic = status;
       io.emit("mic_status_changed", { slot, status });
+    }
+  });
+
+  // ----------------------------
+  //  Toggle Webcam <-- BARU
+  // ----------------------------
+  socket.on("toggle_webcam", ({ slot, userId, status }) => {
+    if (slots[slot]?.id === userId) {
+      slots[slot].webcam = status;
+      io.emit("webcam_status_changed", { slot, status });
     }
   });
 
@@ -222,15 +245,18 @@ io.on("connection", (socket) => {
   //  WebRTC Signaling
   // ----------------------------
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (toSocketId) io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
+    if (toSocketId)
+      io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-answer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (toSocketId) io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
+    if (toSocketId)
+      io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-ice", ({ toSocketId, candidate, fromSocketId }) => {
-    if (toSocketId) io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
+    if (toSocketId)
+      io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
   });
 
   // ----------------------------

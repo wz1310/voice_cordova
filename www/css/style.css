@@ -351,3 +351,40 @@ footer {
 .fullscreen-btn:hover {
   background: rgba(0,0,0,0.6);
 }
+.webcam-btn {
+  position: absolute;
+  top: 10px;
+  right: 90px; /* Atur posisi agar tidak bertabrakan dengan volume/cast */
+  background: #000000aa;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.webcam-btn img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.video-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%; /* Sedikit lebih kecil dari circle */
+  height: 90%;
+  border-radius: 50%;
+  overflow: hidden; /* Penting untuk clip video menjadi lingkaran */
+  background: black;
+  z-index: 5;
+  pointer-events: none; /* Agar klik tetap tembus ke slot di bawahnya */
+}
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Penting agar video mengisi container */
+  position: absolute;
+}
