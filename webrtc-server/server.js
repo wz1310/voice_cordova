@@ -5,8 +5,8 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const twilio = require("twilio");
-const fs = require("fs"); // <-- BARU: Import filesystem
-const path = require("path"); // <-- BARU: Import path
+const fs = require("fs");
+const path = require("path");
 
 // --------------------------------------------------
 //  Twilio Credentials (gunakan ENV pada production)
@@ -44,38 +44,39 @@ app.get("/turn-token", async (req, res) => {
     const token = await twilioClient.tokens.create();
     res.json(token);
   } catch (err) {
-    console.error("Twilio Error:", err.message || err);
+    console.error("Twilio Error:", err.message);
     res.status(500).json({
       error: "twilio_failed",
-      message: err.message || String(err),
+      message: err.message,
     });
   }
 });
 
 // ==================================================
-//  Load User Data <-- BARU
+//  Load User Data
 // ==================================================
 let registeredUsers = [];
+
 try {
   const dataPath = path.join(__dirname, "data", "data.json");
-  const data = fs.readFileSync(dataPath, "utf-8");
-  registeredUsers = JSON.parse(data);
+  const raw = fs.readFileSync(dataPath, "utf-8");
+  registeredUsers = JSON.parse(raw);
+
   console.log(`Loaded ${registeredUsers.length} registered users.`);
 } catch (err) {
   console.error("Error loading data.json:", err.message);
 }
-// ==================================================
 
 // ==================================================
 //  Socket.IO Configuration
 // ==================================================
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"], allowedHeaders: ["*"] },
-  transports: ["polling"], // Lebih stabil untuk DevTunnel
+  transports: ["polling"],
   allowEIO3: true,
 });
 
-// Inject CORS ke polling header Socket.IO
+// Inject CORS ke header polling
 io.engine.on("headers", (headers) => {
   headers["Access-Control-Allow-Origin"] = "*";
   headers["Access-Control-Allow-Credentials"] = "false";
@@ -86,8 +87,7 @@ io.engine.on("headers", (headers) => {
 //  Voice Room State
 // ==================================================
 const NUM_SLOTS = 8;
-const slots = {};
-// Example: slots[1] = { id, name, mic, slot, socketId, speaking }
+const slots = {}; // slots[n]: { id, name, mic, webcam, slot, socketId, speaking }
 
 // ==================================================
 //  Socket.IO Events
@@ -95,72 +95,56 @@ const slots = {};
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // ----------------------------
-  //  Screen Share Started <-- BARU
-  // ----------------------------
+  // --------------------------------------------------
+  //  Screen Share Started
+  // --------------------------------------------------
   socket.on("start_screen_share_signal", ({ fromSocketId, toSocketId }) => {
     if (toSocketId) {
-      // Jika ada toSocketId (peer baru), kirim HANYA ke peer itu
-      io.to(toSocketId).emit("start_screen_share_signal", {
-        fromSocketId: fromSocketId,
-      });
-      console.log(
-        `[SIGNAL] Screen share signal sent by ${fromSocketId} to NEW PEER: ${toSocketId}`
-      );
+      io.to(toSocketId).emit("start_screen_share_signal", { fromSocketId });
+      console.log(`[SCREEN] ${fromSocketId} → NEW PEER: ${toSocketId}`);
     } else {
-      // Jika tidak ada toSocketId (peer lama saat memulai share), kirim broadcast
-      socket.broadcast.emit("start_screen_share_signal", {
-        fromSocketId: fromSocketId,
-      });
-      console.log(
-        `[SIGNAL] Screen share signal sent by ${fromSocketId} to ALL OTHERS.`
-      );
+      socket.broadcast.emit("start_screen_share_signal", { fromSocketId });
+      console.log(`[SCREEN] ${fromSocketId} broadcast to all`);
     }
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Screen Share Stopped
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("stop_screen_share", ({ toSocketId, fromSocketId }) => {
-    if (toSocketId) {
-      io.to(toSocketId).emit("stop_screen_share", { fromSocketId });
-    } else {
-      socket.broadcast.emit("stop_screen_share", { fromSocketId });
-    }
+    if (toSocketId) io.to(toSocketId).emit("stop_screen_share", { fromSocketId });
+    else socket.broadcast.emit("stop_screen_share", { fromSocketId });
   });
 
-  // ----------------------------
-  //  Identity Attach
-  // ----------------------------
+  // --------------------------------------------------
+  //  Identify
+  // --------------------------------------------------
   socket.on("identify", (user) => {
     socket.data.user = user;
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Get Room State
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("get_room_state", () => {
     io.to(socket.id).emit("room_state", { slots });
   });
 
-  // ----------------------------
-  //  User Login Validation <-- BARU
-  // ----------------------------
+  // --------------------------------------------------
+  //  Login Validation
+  // --------------------------------------------------
   socket.on("validate_login", ({ username, password }) => {
     const userMatch = registeredUsers.find(
       (u) => u.username === username && u.password === password
     );
 
     if (userMatch) {
-      // Login berhasil, kirim data user yang valid kembali ke client
       socket.emit("login_success", {
         isValid: true,
         name: userMatch.name,
-        userId: userMatch.id, // <-- PENTING: Kirim ID dari data.json
-        // Anda bisa menambahkan ID unik di sini, atau biarkan client yang membuatnya
+        userId: userMatch.id,
       });
     } else {
-      // Login gagal
       socket.emit("login_failure", {
         isValid: false,
         message: "Invalid username or password.",
@@ -168,28 +152,26 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Join Voice Slot
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("join_voice", ({ slot, user, authUserId }) => {
-    // 1. Pengecekan Duplikasi ID (Hanya boleh 1 sesi per ID)
+    // Cegah duplikasi sesi user
     const existingSlot = Object.values(slots).find(
       (s) => s.authUserId === authUserId
     );
 
     if (existingSlot && existingSlot.slot !== slot) {
-      // ID sudah duduk di slot lain
       socket.emit("join_failed", { slot, reason: "duplicate_id" });
       return;
     }
 
-    // 2. Cek apakah slot sudah terisi oleh ID lain
+    // Slot terisi user lain
     if (slots[slot] && slots[slot].authUserId !== authUserId) {
       socket.emit("join_failed", { slot, reason: "occupied" });
       return;
     }
 
-    // 3. Verifikasi final dan ambil data user (opsional, karena sudah diverifikasi saat login)
     const userMatch = registeredUsers.find((u) => u.id === authUserId);
 
     if (!userMatch) {
@@ -197,16 +179,16 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Pastikan nama pengguna dari server digunakan
+    // Pakai data resmi dari server
     user.name = userMatch.name;
-    user.id = authUserId; // <-- Pastikan myUser.id diset ke ID dari server
+    user.id = authUserId;
 
-    if (typeof slot !== "number" || slot < 1 || slot > NUM_SLOTS) {
+    if (slot < 1 || slot > NUM_SLOTS) {
       socket.emit("join_failed", { slot, reason: "invalid_slot" });
       return;
     }
 
-    // Remove dari slot sebelumnya
+    // Hapus slot lama (kalau pindah)
     for (const s in slots) {
       if (slots[s]?.id === user.id) {
         delete slots[s];
@@ -214,41 +196,35 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Slot dipakai user lain
-    if (slots[slot] && slots[slot].id !== user.id) {
-      socket.emit("join_failed", { slot, reason: "occupied" });
-      return;
-    }
-
-    // Assign user ke slot
+    // Set slot baru
     slots[slot] = {
       ...user,
-      authUserId: authUserId, // <-- PENTING: Simpan ID autentikasi di slot
+      authUserId,
       mic: user.mic || "on",
       webcam: user.webcam || "off",
-      slot: Number(slot),
+      slot,
       socketId: socket.id,
       speaking: false,
     };
 
     io.emit("user_joined_voice", { slot, user: slots[slot] });
 
-    // Kirim daftar peer lain ke user yang baru join
-    const existing = Object.keys(slots)
+    // Kirim peer list ke user baru
+    const peers = Object.keys(slots)
       .filter((s) => slots[s].socketId !== socket.id)
       .map((s) => ({
         slot: Number(s),
         socketId: slots[s].socketId,
       }));
 
-    io.to(socket.id).emit("existing_peers", existing);
+    io.to(socket.id).emit("existing_peers", peers);
 
     console.log("User joined slot:", slot, slots[slot]);
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Leave Voice
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("leave_voice", ({ slot, userId }) => {
     if (slots[slot]?.id === userId) {
       delete slots[slot];
@@ -256,9 +232,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Toggle Mic
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("toggle_mic", ({ slot, userId, status }) => {
     if (slots[slot]?.id === userId) {
       slots[slot].mic = status;
@@ -266,9 +242,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ----------------------------
-  //  Toggle Webcam <-- BARU
-  // ----------------------------
+  // --------------------------------------------------
+  //  Toggle Webcam
+  // --------------------------------------------------
   socket.on("toggle_webcam", ({ slot, userId, status }) => {
     if (slots[slot]?.id === userId) {
       slots[slot].webcam = status;
@@ -276,9 +252,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Speaking Indicator
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("user_speaking", ({ userId, speaking }) => {
     for (const s in slots) {
       if (slots[s]?.id === userId) slots[s].speaking = speaking;
@@ -286,19 +262,17 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("user_speaking", { userId, speaking });
   });
 
-  // ----------------------------
-  //  Live Chat (Text)
-  // ----------------------------
+  // --------------------------------------------------
+  //  Text Chat
+  // --------------------------------------------------
   socket.on("user_chat", ({ userId, message }) => {
     io.emit("user_chat", { userId, message });
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Kick User
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("kick_user", ({ userId }) => {
-    console.log("Kick requested for:", userId);
-
     let kickedSlot = null;
     let kickedSocketId = null;
 
@@ -317,33 +291,27 @@ io.on("connection", (socket) => {
       io.emit("update_slots", slots);
     }
 
-    if (kickedSocketId) {
-      io.to(kickedSocketId).emit("kicked");
-      console.log("Sent 'kicked' to:", kickedSocketId);
-    }
+    if (kickedSocketId) io.to(kickedSocketId).emit("kicked");
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  WebRTC Signaling
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("webrtc-offer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (toSocketId)
-      io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-offer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-answer", ({ toSocketId, fromSocketId, sdp }) => {
-    if (toSocketId)
-      io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-answer", { fromSocketId, sdp });
   });
 
   socket.on("webrtc-ice", ({ toSocketId, candidate, fromSocketId }) => {
-    if (toSocketId)
-      io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
+    if (toSocketId) io.to(toSocketId).emit("webrtc-ice", { fromSocketId, candidate });
   });
 
-  // ----------------------------
+  // --------------------------------------------------
   //  Disconnect Cleanup
-  // ----------------------------
+  // --------------------------------------------------
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
 
