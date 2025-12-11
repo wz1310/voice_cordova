@@ -5,6 +5,8 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const twilio = require("twilio");
+const fs = require("fs"); // <-- BARU: Import filesystem
+const path = require("path"); // <-- BARU: Import path
 
 // --------------------------------------------------
 //  Twilio Credentials (gunakan ENV pada production)
@@ -49,6 +51,20 @@ app.get("/turn-token", async (req, res) => {
     });
   }
 });
+
+// ==================================================
+//  Load User Data <-- BARU
+// ==================================================
+let registeredUsers = [];
+try {
+  const dataPath = path.join(__dirname, "data", "data.json");
+  const data = fs.readFileSync(dataPath, "utf-8");
+  registeredUsers = JSON.parse(data);
+  console.log(`Loaded ${registeredUsers.length} registered users.`);
+} catch (err) {
+  console.error("Error loading data.json:", err.message);
+}
+// ==================================================
 
 // ==================================================
 //  Socket.IO Configuration
@@ -128,9 +144,63 @@ io.on("connection", (socket) => {
   });
 
   // ----------------------------
+  //  User Login Validation <-- BARU
+  // ----------------------------
+  socket.on("validate_login", ({ username, password }) => {
+    const userMatch = registeredUsers.find(
+      (u) => u.username === username && u.password === password
+    );
+
+    if (userMatch) {
+      // Login berhasil, kirim data user yang valid kembali ke client
+      socket.emit("login_success", {
+        isValid: true,
+        name: userMatch.name,
+        userId: userMatch.id, // <-- PENTING: Kirim ID dari data.json
+        // Anda bisa menambahkan ID unik di sini, atau biarkan client yang membuatnya
+      });
+    } else {
+      // Login gagal
+      socket.emit("login_failure", {
+        isValid: false,
+        message: "Invalid username or password.",
+      });
+    }
+  });
+
+  // ----------------------------
   //  Join Voice Slot
   // ----------------------------
-  socket.on("join_voice", ({ slot, user }) => {
+  socket.on("join_voice", ({ slot, user, authUserId }) => {
+    // 1. Pengecekan Duplikasi ID (Hanya boleh 1 sesi per ID)
+    const existingSlot = Object.values(slots).find(
+      (s) => s.authUserId === authUserId
+    );
+
+    if (existingSlot && existingSlot.slot !== slot) {
+      // ID sudah duduk di slot lain
+      socket.emit("join_failed", { slot, reason: "duplicate_id" });
+      return;
+    }
+
+    // 2. Cek apakah slot sudah terisi oleh ID lain
+    if (slots[slot] && slots[slot].authUserId !== authUserId) {
+      socket.emit("join_failed", { slot, reason: "occupied" });
+      return;
+    }
+
+    // 3. Verifikasi final dan ambil data user (opsional, karena sudah diverifikasi saat login)
+    const userMatch = registeredUsers.find((u) => u.id === authUserId);
+
+    if (!userMatch) {
+      socket.emit("join_failed", { slot, reason: "unauthorized" });
+      return;
+    }
+
+    // Pastikan nama pengguna dari server digunakan
+    user.name = userMatch.name;
+    user.id = authUserId; // <-- Pastikan myUser.id diset ke ID dari server
+
     if (typeof slot !== "number" || slot < 1 || slot > NUM_SLOTS) {
       socket.emit("join_failed", { slot, reason: "invalid_slot" });
       return;
@@ -153,6 +223,7 @@ io.on("connection", (socket) => {
     // Assign user ke slot
     slots[slot] = {
       ...user,
+      authUserId: authUserId, // <-- PENTING: Simpan ID autentikasi di slot
       mic: user.mic || "on",
       webcam: user.webcam || "off",
       slot: Number(slot),

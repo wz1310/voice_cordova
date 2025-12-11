@@ -7,6 +7,8 @@ document.addEventListener("deviceready", () => {
   let webcamStream = null; // <-- TAMBAHAN
   let mySlot = null;
   let localStream = null;
+  let authUsername = null; // <-- BARU: Simpan username yang berhasil login
+  let authUserId = null; // <-- BARU: Simpan ID yang berhasil login (menggantikan authUsername)
 
   const NUM_SLOTS = 8;
   const peers = {};
@@ -22,7 +24,7 @@ document.addEventListener("deviceready", () => {
 
   const myUser = {
     id: "u" + Math.floor(Math.random() * 999999),
-    name: "User " + Math.floor(Math.random() * 99),
+    name: "Tamu", // <-- Ganti nama default
     avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=" + Math.random(),
     mic: "on",
     webcam: "off", // <-- TAMBAHAN
@@ -761,6 +763,54 @@ document.addEventListener("deviceready", () => {
     await entry.pc.addIceCandidate(new RTCIceCandidate(candidate));
   });
 
+  // ----------------------------
+  //  Login Handlers <-- BARU
+  // ----------------------------
+  socket.on("login_success", ({ isValid, name, userId }) => { // <-- PASTIKAN userId ADA DI SINI
+    myUser.name = name;
+    // Gunakan hash dari nama sebagai seed avatar agar avatar lebih konsisten// Gunakan ID dari server untuk identitas
+    myUser.id = userId; // <-- PENTING: Update myUser.id dengan ID server
+    authUserId = userId; // <-- Simpan ID otentikasi permanen
+    const seed = name
+      .split("")
+      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    myUser.avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=" + seed;
+
+    // Lanjutkan proses join setelah login berhasil
+    socket.emit("join_voice", {
+      slot: pendingSlot, // Gunakan slot yang disimpan sebelumnya
+      user: { ...myUser, socketId: socket.id },
+      authUserId: authUserId, // Kirim ID otentikasi
+    });
+
+    mySlot = pendingSlot;
+    pendingSlot = null;
+  });
+
+  socket.on("login_failure", ({ message }) => {
+    alert("Login Gagal: " + message);
+    pendingSlot = null;
+    authUsername = null;
+  });
+
+  socket.on("join_failed", ({ reason }) => {
+    // <-- TAMBAHAN: Untuk notifikasi join gagal
+    if (reason === "unauthorized") {
+      alert("Anda tidak memiliki otorisasi untuk bergabung dengan slot ini.");
+    } else if (reason === "occupied") {
+      alert("Slot sudah terisi.");
+    } else if (reason === "duplicate_id") {
+      // <-- BARU
+      alert(
+        "ID Anda sudah digunakan. Anda hanya bisa bergabung dengan satu sesi."
+      );
+      localCleanupAfterKick();
+      location.reload();
+    }
+    pendingSlot = null;
+    authUsername = null;
+  });
+
   /* =========================================================
       SLOT & UI HANDLERS
   ========================================================= */
@@ -818,42 +868,79 @@ document.addEventListener("deviceready", () => {
     const label = circle.parentNode.querySelector(".slot-name");
     if (label) label.remove();
   }
+  let pendingSlot = null; // <-- BARU: Slot yang akan di-join setelah login
 
   async function handleSlotClick(slot) {
+    if (mySlot === slot) return; // Klik slot yang sama, abaikan
+
+    // ==========================================================
+    // BAGIAN 1: PERTAMA KALI JOIN (Membutuhkan Autentikasi Login)
+    // ==========================================================
     if (!mySlot) {
+      if (pendingSlot) return;
+      pendingSlot = slot;
+
+      const creds = await promptForCredentials();
+
+      if (!creds) {
+        pendingSlot = null;
+        return; // User membatalkan login
+      }
+
+      authUserId = creds.username; // <-- Simpan username sementara
+
+      // Persiapan Stream
       try {
         localStream = await startLocalStream();
         startMicVisualizer(localStream);
-      } catch {
+      } catch (err) {
+        // Jika gagal start audio, batalkan join
+        pendingSlot = null;
+        authUsername = null;
         return;
       }
 
-      socket.emit("join_voice", {
-        slot,
-        user: { ...myUser, socketId: socket.id },
-      });
+      // Kirim kredensial ke server untuk validasi
+      socket.emit("validate_login", creds);
 
-      mySlot = slot;
+      // HENTIKAN di sini. Proses join dilanjutkan di event 'login_success'.
       return;
     }
 
-    if (slot === mySlot) return;
+    // ==========================================================
+    // BAGIAN 2: PINDAH SLOT (mySlot SUDAH terisi, artinya user SUDAH login)
+    // ==========================================================
 
-    // --- START MODIFIKASI BARU ---
-    // Jika user pindah slot, matikan dulu webcam jika sedang aktif.
-    // Ini akan memastikan track dihapus dari PC dan status di server diupdate.
+    // 1. Matikan webcam jika aktif
     if (webcamStream) {
-      await stopWebcamStream(); // <--- BARIS TAMBAHAN UTAMA
+      await stopWebcamStream();
     }
-    // --- END MODIFIKASI BARU ---
 
+    // 2. Tinggalkan slot lama
     socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+
+    // 3. Gabung slot baru
     socket.emit("join_voice", {
       slot,
       user: { ...myUser, socketId: socket.id },
+      authUserId: authUserId, // <-- Ganti authUsername ke authUserId
     });
 
+    // 4. Update status lokal
     mySlot = slot;
+  }
+
+  /* =========================================================
+      PROMPT LOGIN <-- BARU
+  ========================================================= */
+  async function promptForCredentials() {
+    const username = prompt("Masukkan Username:");
+    if (!username) return null;
+
+    const password = prompt("Masukkan Password untuk " + username + ":");
+    if (!password) return null;
+
+    return { username, password };
   }
 
   /* =========================================================
@@ -1018,6 +1105,7 @@ document.addEventListener("deviceready", () => {
       webcamStream = null;
     }
     btnWebcam.style.background = ""; // <-- BARU
+    authUserId = null; // <-- Ganti authUsername ke authUserId
   }
 
   document.getElementById("btnKeluar").onclick = () => {
