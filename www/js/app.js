@@ -244,6 +244,10 @@ document.addEventListener("deviceready", () => {
 
   // Listener Tombol Webcam
   btnWebcam.addEventListener("click", async () => {
+    if (screenStream) {
+      alert("Matikan Screen Share dulu sebelum mengaktifkan kamera!");
+      return;
+    }
     if (!mySlot) return alert("Join slot dulu sebelum mengaktifkan kamera!");
     if (webcamStream) return stopWebcamStream();
     return startWebcamStream();
@@ -254,6 +258,10 @@ document.addEventListener("deviceready", () => {
   ========================================================= */
   btnScreenShare.addEventListener("click", async () => {
     const screenContainer = document.getElementById("screenShareContainer");
+
+    if (webcamStream) {
+      await stopWebcamStream(); // <-- agar tidak bentrok dengan screen
+    }
 
     if (!mySlot) return alert("Join slot dulu sebelum share screen!");
     if (screenStream) return await stopScreenShare();
@@ -812,6 +820,14 @@ document.addEventListener("deviceready", () => {
     }
 
     if (slot === mySlot) return;
+
+    // --- START MODIFIKASI BARU ---
+    // Jika user pindah slot, matikan dulu webcam jika sedang aktif.
+    // Ini akan memastikan track dihapus dari PC dan status di server diupdate.
+    if (webcamStream) {
+      await stopWebcamStream(); // <--- BARIS TAMBAHAN UTAMA
+    }
+    // --- END MODIFIKASI BARU ---
 
     socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
     socket.emit("join_voice", {
