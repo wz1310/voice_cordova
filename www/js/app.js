@@ -443,12 +443,23 @@ document.addEventListener("deviceready", () => {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    if (localStream)
-      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
-
     // Tambahkan stream webcam lokal jika aktif
     if (webcamStream)
       webcamStream.getTracks().forEach((t) => pc.addTrack(t, webcamStream)); // <-- BARU
+
+    // *** ➡️ TAMBAHKAN BLOK INI UNTUK SCREEN SHARE ***
+    if (screenStream) {
+      screenStream.getTracks().forEach((t) => pc.addTrack(t, screenStream));
+      // Sinyal ke peer baru bahwa kita sedang berbagi layar (untuk flag isSharingScreen)
+      socket.emit("start_screen_share_signal", {
+        fromSocketId: socket.id,
+        toSocketId: peerSocketId, // Kirim langsung ke peer yang baru join
+      });
+    }
+    // **********************************************
+
+    if (localStream)
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
 
     const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
 
@@ -699,6 +710,13 @@ document.addEventListener("deviceready", () => {
   });
 
   socket.on("existing_peers", async (existing) => {
+    if (screenStream) {
+      screenStream.getTracks().forEach((t) => pc.addTrack(t, screenStream));
+      socket.emit("start_screen_share_signal", {
+        fromSocketId: socket.id,
+        toSocketId: peerSocketId,
+      });
+    }
     if (!localStream) localStream = await startLocalStream();
 
     for (const p of existing) {

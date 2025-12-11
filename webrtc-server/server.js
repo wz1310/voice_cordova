@@ -82,13 +82,24 @@ io.on("connection", (socket) => {
   // ----------------------------
   //  Screen Share Started <-- BARU
   // ----------------------------
-  socket.on("start_screen_share_signal", ({ fromSocketId }) => {
-    // Kirim sinyal ke semua client lain KECUALI pengirim (User A)
-    socket.broadcast.emit("start_screen_share_signal", {
-      fromSocketId: fromSocketId, // Pastikan menggunakan ID pengirim dari klien
-    });
-
-    console.log(`[SIGNAL] Screen share signal sent by: ${fromSocketId}`);
+  socket.on("start_screen_share_signal", ({ fromSocketId, toSocketId }) => {
+    if (toSocketId) {
+      // Jika ada toSocketId (peer baru), kirim HANYA ke peer itu
+      io.to(toSocketId).emit("start_screen_share_signal", {
+        fromSocketId: fromSocketId,
+      });
+      console.log(
+        `[SIGNAL] Screen share signal sent by ${fromSocketId} to NEW PEER: ${toSocketId}`
+      );
+    } else {
+      // Jika tidak ada toSocketId (peer lama saat memulai share), kirim broadcast
+      socket.broadcast.emit("start_screen_share_signal", {
+        fromSocketId: fromSocketId,
+      });
+      console.log(
+        `[SIGNAL] Screen share signal sent by ${fromSocketId} to ALL OTHERS.`
+      );
+    }
   });
 
   // ----------------------------
