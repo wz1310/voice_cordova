@@ -5,7 +5,7 @@ document.addEventListener("deviceready", () => {
   // Constants & State
   // -------------------------
   const NUM_SLOTS = 8;
-  const SIGNALING_URL = "https://m3h048qq-4000.asse.devtunnels.ms";
+  const SIGNALING_URL = "https://c1jx4415-4000.asse.devtunnels.ms";
   let RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
   let isMuted = false;
@@ -31,6 +31,26 @@ document.addEventListener("deviceready", () => {
   const btnWebcam = document.getElementById("btnWebcam");
   const btnVolOn = document.getElementById("volumeon");
   const btnSilent = document.getElementById("silent");
+
+  // BARU
+  const btnMenu = document.getElementById("btnMenu");
+  const sideMenu = document.getElementById("sideMenu");
+  const menuOverlay = sideMenu ? sideMenu.querySelector(".menu-overlay") : null;
+
+  // BARU: Login Elements (Dipindahkan ke Side Menu)
+  const loginForm = document.getElementById("loginForm");
+  const loginUsernameInput = document.getElementById("loginUsername");
+  const loginPasswordInput = document.getElementById("loginPassword");
+  const btnLoginSubmit = document.getElementById("btnLoginSubmit");
+  const loginMessage = document.getElementById("loginMessage");
+
+  // BARU UNTUK HELLO USER
+  const userGreeting = document.getElementById("userGreeting"); // <-- TAMBAHKAN INI
+
+  // State untuk form login
+  let loginPromiseResolve = null;
+  let isLoggingIn = false; // Status untuk mencegah klik ganda
+  // ...
 
   // -------------------------
   // Local user
@@ -126,6 +146,15 @@ document.addEventListener("deviceready", () => {
     );
     return key ? Number(key) : null;
   }
+  // BARU: Utility untuk mencari slot kosong
+  function findFirstAvailableSlot() {
+    for (let i = 1; i <= NUM_SLOTS; i++) {
+      if (!lastSlots[i]) {
+        return i;
+      }
+    }
+    return null;
+  }
 
   // -------------------------
   // Webcam handlers
@@ -144,7 +173,9 @@ document.addEventListener("deviceready", () => {
       // kirim track video ke semua peer
       for (const peerId in peers) {
         const pc = peers[peerId].pc;
-        webcamStream.getVideoTracks().forEach((t) => pc.addTrack(t, webcamStream));
+        webcamStream
+          .getVideoTracks()
+          .forEach((t) => pc.addTrack(t, webcamStream));
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -157,7 +188,11 @@ document.addEventListener("deviceready", () => {
       }
 
       myUser.webcam = "on";
-      socket.emit("toggle_webcam", { slot: mySlot, userId: myUser.id, status: myUser.webcam });
+      socket.emit("toggle_webcam", {
+        slot: mySlot,
+        userId: myUser.id,
+        status: myUser.webcam,
+      });
     } catch (err) {
       console.warn("Webcam gagal", err);
       alert("Tidak bisa mengakses kamera.");
@@ -202,7 +237,11 @@ document.addEventListener("deviceready", () => {
     }
 
     myUser.webcam = "off";
-    socket.emit("toggle_webcam", { slot: mySlot, userId: myUser.id, status: myUser.webcam });
+    socket.emit("toggle_webcam", {
+      slot: mySlot,
+      userId: myUser.id,
+      status: myUser.webcam,
+    });
   }
 
   function updateVideoElement(slot, peerSocketId, stream, isLocal = false) {
@@ -232,7 +271,9 @@ document.addEventListener("deviceready", () => {
 
       video.srcObject = stream;
     } else if (container) {
-      const video = container.querySelector(`video[data-peer="${peerSocketId}"]`);
+      const video = container.querySelector(
+        `video[data-peer="${peerSocketId}"]`
+      );
       if (video) video.remove();
 
       if (!container.querySelector("video")) container.remove();
@@ -266,7 +307,10 @@ document.addEventListener("deviceready", () => {
       if (screenStream) return await stopScreenShare();
 
       try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
 
         socket.emit("start_screen_share_signal", { fromSocketId: socket.id });
 
@@ -315,7 +359,10 @@ document.addEventListener("deviceready", () => {
     for (const peerId in peers) {
       const pc = peers[peerId].pc;
 
-      socket.emit("stop_screen_share", { toSocketId: peerId, fromSocketId: socket.id });
+      socket.emit("stop_screen_share", {
+        toSocketId: peerId,
+        fromSocketId: socket.id,
+      });
 
       pc.getSenders().forEach((sender) => {
         if (screenStream.getTracks().includes(sender.track)) {
@@ -361,7 +408,8 @@ document.addEventListener("deviceready", () => {
       const data = await resp.json();
 
       const iceArr = data.ice_servers || data.iceServers || [];
-      if (!Array.isArray(iceArr) || iceArr.length === 0) return RTC_CONFIG.iceServers;
+      if (!Array.isArray(iceArr) || iceArr.length === 0)
+        return RTC_CONFIG.iceServers;
 
       return iceArr.map((s) => ({
         urls: s.urls || s.url || s.servers,
@@ -411,7 +459,9 @@ document.addEventListener("deviceready", () => {
       if (mySlot) {
         const myCircle = document.querySelector(`#slot${mySlot} .circle`);
         if (myCircle)
-          myCircle.style.boxShadow = speaking ? "0 0 20px rgba(0,255,100,0.9)" : "none";
+          myCircle.style.boxShadow = speaking
+            ? "0 0 20px rgba(0,255,100,0.9)"
+            : "none";
       }
 
       if (speaking !== lastSpeaking) {
@@ -434,16 +484,23 @@ document.addEventListener("deviceready", () => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
     // tambahkan webcam jika aktif
-    if (webcamStream) webcamStream.getTracks().forEach((t) => pc.addTrack(t, webcamStream));
+    if (webcamStream)
+      webcamStream.getTracks().forEach((t) => pc.addTrack(t, webcamStream));
 
     // tambahkan screen jika aktif
     if (screenStream) {
       screenStream.getTracks().forEach((t) => pc.addTrack(t, screenStream));
-      socket.emit("start_screen_share_signal", { fromSocketId: socket.id, toSocketId: peerSocketId });
+      socket.emit("start_screen_share_signal", {
+        fromSocketId: socket.id,
+        toSocketId: peerSocketId,
+      });
     }
 
     // tambahkan audio lokal
-    if (localStreamParam) localStreamParam.getTracks().forEach((t) => pc.addTrack(t, localStreamParam));
+    if (localStreamParam)
+      localStreamParam
+        .getTracks()
+        .forEach((t) => pc.addTrack(t, localStreamParam));
 
     const audioEl = createRemoteAudioElement(peerSocketId, remoteSlot);
 
@@ -452,17 +509,22 @@ document.addEventListener("deviceready", () => {
       const kind = evt.track.kind;
       const track = evt.track;
 
-      console.log(`[ONTRACK] Peer: ${peerSocketId} Kind: ${kind} Label: ${track.label}`);
+      console.log(
+        `[ONTRACK] Peer: ${peerSocketId} Kind: ${kind} Label: ${track.label}`
+      );
 
       if (kind === "video") {
         const container = document.getElementById("screenShareContainer");
-        const isSharing = peers[peerSocketId] && peers[peerSocketId].isSharingScreen;
+        const isSharing =
+          peers[peerSocketId] && peers[peerSocketId].isSharingScreen;
         const isScreenShare = track.label.includes("screen") || isSharing;
 
         if (isScreenShare) {
           container.style.display = "flex";
 
-          let video = container.querySelector(`video[data-peer="${peerSocketId}"]`);
+          let video = container.querySelector(
+            `video[data-peer="${peerSocketId}"]`
+          );
           if (!video) {
             video = document.createElement("video");
             video.dataset.peer = peerSocketId;
@@ -519,7 +581,11 @@ document.addEventListener("deviceready", () => {
 
     pc.onicecandidate = (e) => {
       if (e.candidate)
-        socket.emit("webrtc-ice", { toSocketId: peerSocketId, fromSocketId: socket.id, candidate: e.candidate });
+        socket.emit("webrtc-ice", {
+          toSocketId: peerSocketId,
+          fromSocketId: socket.id,
+          candidate: e.candidate,
+        });
     };
 
     peers[peerSocketId] = { pc, audioEl, slot: remoteSlot };
@@ -529,12 +595,18 @@ document.addEventListener("deviceready", () => {
   // -------------------------
   // Socket events
   // -------------------------
-  const socket = io(SIGNALING_URL, { transports: ["polling"], upgrade: false, forceNew: true });
+  const socket = io(SIGNALING_URL, {
+    transports: ["polling"],
+    upgrade: false,
+    forceNew: true,
+  });
 
   socket.on("start_screen_share_signal", ({ fromSocketId }) => {
     if (peers[fromSocketId]) {
       peers[fromSocketId].isSharingScreen = true;
-      console.log(`[SIGNAL] Peer ${fromSocketId} is now marked as sharing screen.`);
+      console.log(
+        `[SIGNAL] Peer ${fromSocketId} is now marked as sharing screen.`
+      );
     }
   });
 
@@ -560,6 +632,9 @@ document.addEventListener("deviceready", () => {
   socket.on("user_joined_voice", ({ slot, user }) => {
     lastSlots[slot] = user;
     updateSlotUI(slot, user);
+    if (user.id === myUser.id) {
+      mySlot = slot;
+    }
   });
 
   socket.on("stop_screen_share", ({ fromSocketId }) => {
@@ -606,8 +681,13 @@ document.addEventListener("deviceready", () => {
       if (peers[peerId]) {
         const pc = peers[peerId].pc;
         pc.getReceivers().forEach((receiver) => {
-          if (receiver.track?.kind === "video" && receiver.track.label !== "screen") {
-            console.log(`[CLEANUP] Webcam OFF: Removing remote video from slot ${slot} for peer ${peerId}`);
+          if (
+            receiver.track?.kind === "video" &&
+            receiver.track.label !== "screen"
+          ) {
+            console.log(
+              `[CLEANUP] Webcam OFF: Removing remote video from slot ${slot} for peer ${peerId}`
+            );
           }
         });
       }
@@ -615,9 +695,14 @@ document.addEventListener("deviceready", () => {
   });
 
   socket.on("user_speaking", ({ userId, speaking }) => {
-    const slot = Object.keys(lastSlots).find((s) => lastSlots[s]?.id === userId);
+    const slot = Object.keys(lastSlots).find(
+      (s) => lastSlots[s]?.id === userId
+    );
     const circle = document.querySelector(`#slot${slot} .circle`);
-    if (circle) circle.style.boxShadow = speaking ? "0 0 30px rgba(0,255,150,0.9)" : "none";
+    if (circle)
+      circle.style.boxShadow = speaking
+        ? "0 0 30px rgba(0,255,150,0.9)"
+        : "none";
   });
 
   socket.on("mic_status_changed", ({ slot, status }) => {
@@ -640,7 +725,9 @@ document.addEventListener("deviceready", () => {
   });
 
   socket.on("user_chat", ({ userId, message }) => {
-    const slot = Object.keys(lastSlots).find((s) => lastSlots[s]?.id === userId);
+    const slot = Object.keys(lastSlots).find(
+      (s) => lastSlots[s]?.id === userId
+    );
     showFloatingText(slot, message);
   });
 
@@ -652,7 +739,11 @@ document.addEventListener("deviceready", () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("webrtc-offer", { toSocketId: p.socketId, fromSocketId: socket.id, sdp: pc.localDescription });
+      socket.emit("webrtc-offer", {
+        toSocketId: p.socketId,
+        fromSocketId: socket.id,
+        sdp: pc.localDescription,
+      });
     }
   });
 
@@ -666,7 +757,11 @@ document.addEventListener("deviceready", () => {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    socket.emit("webrtc-answer", { toSocketId: fromSocketId, fromSocketId: socket.id, sdp: pc.localDescription });
+    socket.emit("webrtc-answer", {
+      toSocketId: fromSocketId,
+      fromSocketId: socket.id,
+      sdp: pc.localDescription,
+    });
   });
 
   socket.on("webrtc-answer", async ({ fromSocketId, sdp }) => {
@@ -684,25 +779,74 @@ document.addEventListener("deviceready", () => {
   // -------------------------
   // Login / Join handling
   // -------------------------
-  socket.on("login_success", ({ isValid, name, userId }) => {
+  // ------------- FIX LOGIN SUCCESS (AUTO JOIN SLOT KOSONG) -------------
+  // app.js, sekitar baris 772
+
+  // ------------- FIX LOGIN SUCCESS (AUTO JOIN SLOT KOSONG) -------------
+  // app.js, sekitar baris 772
+
+  // ------------- FIX LOGIN SUCCESS (AUTO JOIN SLOT KOSONG) -------------
+  socket.on("login_success", async ({ isValid, name, userId }) => {
     myUser.name = name;
     myUser.id = userId;
-    authUserId = userId;
+    authUserId = userId; // Simpan user ID yang telah terautentikasi
 
-    const seed = name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    myUser.avatar = "https://api.dicebear.com/7.x/bottts/svg?seed=" + seed;
+    // ... (kode lainnya untuk reset UI)
 
-    // join setelah login
-    socket.emit("join_voice", { slot: pendingSlot, user: { ...myUser, socketId: socket.id }, authUserId });
+    if (loginForm) loginForm.style.display = "none";
+    if (userGreeting) {
+      userGreeting.innerText = `Halo, ${name}!`;
+      userGreeting.style.display = "block"; // Pastikan tampil
+    }
+    closeMenu(); // Tutup menu samping setelah login
 
-    mySlot = pendingSlot;
+    // 🔥 LANGKAH 1: Mulai Local Stream (Microphone) & Visualizer
+    try {
+      localStream = await startLocalStream();
+      startMicVisualizer(localStream);
+    } catch (err) {
+      console.error("Gagal memulai local stream setelah login", err);
+      // Jika gagal, pastikan localStream = null atau handle secara elegan
+    }
+
+    // 🔥 LANGKAH 2: Langsung Cari Slot Kosong & Join
+    const slotKosong = findFirstAvailableSlot();
+
+    if (slotKosong) {
+      socket.emit("join_voice", {
+        slot: slotKosong,
+        user: { ...myUser, socketId: socket.id },
+        authUserId: userId,
+      });
+      mySlot = slotKosong;
+    } else {
+      alert(
+        "Semua slot penuh. Anda sudah login, tetapi tidak ada slot kosong."
+      );
+      // Penting: Reset jika localStream berhasil tapi tidak bisa join
+      if (localStream) {
+        // Jika localStream berhasil, tetapi tidak ada slot, biarkan saja.
+        // User mungkin akan mengklik slot yang kosong jika ada yang keluar.
+      }
+    }
+
+    // 🔥 JANGAN gunakan loginPromiseResolve lagi, kita sudah memisahkan alurnya
+    // Hapus blok kode ini:
+    // if (loginPromiseResolve) {
+    //     loginPromiseResolve({ loggedIn: true, name, userId });
+    //     loginPromiseResolve = null;
+    // }
+
     pendingSlot = null;
+    isLoggingIn = false; // Reset status logging
+    btnLoginSubmit.disabled = false;
   });
 
   socket.on("login_failure", ({ message }) => {
-    alert("Login Gagal: " + message);
-    pendingSlot = null;
-    authUserId = null;
+    loginMessage.innerText = message || "Login gagal. Coba lagi.";
+    btnLoginSubmit.disabled = false; // Aktifkan tombol
+    isLoggingIn = false; // Reset status
+    pendingSlot = null; // Reset pending slot
   });
 
   socket.on("join_failed", ({ reason }) => {
@@ -711,7 +855,9 @@ document.addEventListener("deviceready", () => {
     } else if (reason === "occupied") {
       alert("Slot sudah terisi.");
     } else if (reason === "duplicate_id") {
-      alert("ID Anda sudah digunakan. Anda hanya bisa bergabung dengan satu sesi.");
+      alert(
+        "ID Anda sudah digunakan. Anda hanya bisa bergabung dengan satu sesi."
+      );
       localCleanupAfterKick();
       location.reload();
     }
@@ -723,7 +869,8 @@ document.addEventListener("deviceready", () => {
   // Slot & UI handlers
   // -------------------------
   function updateAllSlots(slots) {
-    for (let i = 1; i <= NUM_SLOTS; i++) slots[i] ? updateSlotUI(i, slots[i]) : clearSlotUI(i);
+    for (let i = 1; i <= NUM_SLOTS; i++)
+      slots[i] ? updateSlotUI(i, slots[i]) : clearSlotUI(i);
   }
 
   function updateSlotUI(slot, user) {
@@ -783,57 +930,109 @@ document.addEventListener("deviceready", () => {
     updateVideoElement(slot, null, null);
   }
 
+  // app.js, sekitar baris 840
+
+  // app.js, sekitar baris 840
+
   async function handleSlotClick(slot) {
     if (mySlot === slot) return;
 
-    // pertama kali join -> butuh autentikasi
-    if (!mySlot) {
-      if (pendingSlot) return;
-      pendingSlot = slot;
-
-      const creds = await promptForCredentials();
-      if (!creds) {
-        pendingSlot = null;
-        return;
+    // Pindah slot (sudah login)
+    if (authUserId) {
+      // Cek apakah sudah login
+      // Jika sedang membagikan webcam, hentikan dulu
+      // 🔥🔥 TAMBAH PENGECUALIAN INI: Cek apakah slot tujuan sudah terisi
+      if (lastSlots[slot]) {
+        return; // Hentikan fungsi di sini. User tetap di slot lama.
       }
+      if (webcamStream) await stopWebcamStream();
 
-      authUserId = creds.username; // sementara
+      // Tinggalkan slot lama
+      if (mySlot)
+        socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
 
-      try {
-        localStream = await startLocalStream();
-        startMicVisualizer(localStream);
-      } catch (err) {
-        pendingSlot = null;
-        authUserId = null;
-        return;
-      }
+      // Join slot baru
+      socket.emit("join_voice", {
+        slot,
+        user: { ...myUser, socketId: socket.id },
+        authUserId,
+      });
 
-      socket.emit("validate_login", creds);
-      return; // lanjut di login_success
+      mySlot = slot;
+      return;
     }
 
-    // pindah slot
-    if (webcamStream) await stopWebcamStream();
+    // 🔥 Belum login: Tampilkan menu login.
+    // User harus klik "Login" di menu samping.
+    if (!authUserId) {
+      // Tampilkan form login, tapi JANGAN LAKUKAN VALIDASI ATAU JOIN
+      openMenu();
+      // Berikan pesan visual jika perlu, tapi biarkan user klik Login.
+      // loginMessage.innerText = "Silakan login terlebih dahulu."; // Opsional
 
-    socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
-
-    socket.emit("join_voice", { slot, user: { ...myUser, socketId: socket.id }, authUserId });
-
-    mySlot = slot;
+      // JANGAN lakukan promptForCredentials() yang mengembalikan Promise,
+      // karena kita mau Login Button yang memicu proses.
+      return;
+    }
   }
 
   // -------------------------
   // Prompt for credentials
   // -------------------------
-  async function promptForCredentials() {
-    const username = prompt("Masukkan Username:");
-    if (!username) return null;
+  // app.js, sekitar baris 896
 
-    const password = prompt("Masukkan Password untuk " + username + ":");
-    if (!password) return null;
+  // -------------------------
+  // Prompt for credentials
+  // -------------------------
+  function promptForCredentials() {
+    // Jika sudah terotorisasi (sudah login), lewati/kembalikan status
+    if (authUserId) {
+      return Promise.resolve({
+        username: myUser.name,
+        password: "", // Password tidak dikirim
+        isReconnecting: true,
+      });
+    }
 
-    return { username, password };
+    // Tampilkan form login di side menu jika belum terlihat
+    if (loginForm) loginForm.style.display = "block";
+
+    // 🔥 Jika belum login, kembalikan Promise yang tidak langsung resolve
+    // Resolve akan dilakukan oleh btnLoginSubmit yang kini langsung memanggil socket.emit("validate_login")
+    // Note: Anda mungkin ingin menampilkan Menu Samping (sideMenu) di sini.
+    openMenu(); // Panggil fungsi openMenu()
+
+    // Cukup kembalikan Promise.reject atau null jika ingin user menekan tombol Login
+    // Kita biarkan user menekan tombol Login di menu samping, jadi kita return Promise yang menahan
+    // fungsi handleSlotClick agar tidak lanjut, atau kita buat Promise yang resolve-nya
+    // akan dipanggil dari login_success.
+
+    // Kita kembalikan Promise yang menunggu, dan resolve-nya akan di-trigger
+    // oleh socket.on("login_success").
+    return new Promise((resolve) => {
+      loginPromiseResolve = resolve;
+    });
   }
+  // -------------------------
+  // Handler Submit Login (BARU)
+  // -------------------------
+  btnLoginSubmit.addEventListener("click", () => {
+    if (isLoggingIn) return; // Cukup cegah klik ganda
+
+    const username = loginUsernameInput.value.trim();
+    const password = loginPasswordInput.value.trim();
+
+    if (!username || !password) {
+      loginMessage.innerText = "Username dan Password harus diisi!";
+      return;
+    }
+
+    isLoggingIn = true;
+    loginMessage.innerText = "Mencoba masuk...";
+    btnLoginSubmit.disabled = true;
+
+    socket.emit("validate_login", { username, password });
+  });
 
   // -------------------------
   // Mic toggle
@@ -845,7 +1044,11 @@ document.addEventListener("deviceready", () => {
     track.enabled = !track.enabled;
     myUser.mic = track.enabled ? "on" : "off";
 
-    socket.emit("toggle_mic", { slot: mySlot, userId: myUser.id, status: myUser.mic });
+    socket.emit("toggle_mic", {
+      slot: mySlot,
+      userId: myUser.id,
+      status: myUser.mic,
+    });
 
     const btn = document.getElementById(`mic-${mySlot}`);
     if (btn) btn.innerText = myUser.mic === "on" ? "🎤" : "🔇";
@@ -898,7 +1101,11 @@ document.addEventListener("deviceready", () => {
     });
 
     document.addEventListener("touchstart", (ev) => {
-      if (chatInput && !ev.target.closest("#chatContainer") && document.activeElement === chatInput) {
+      if (
+        chatInput &&
+        !ev.target.closest("#chatContainer") &&
+        document.activeElement === chatInput
+      ) {
         chatInput.blur();
       }
     });
@@ -938,7 +1145,11 @@ document.addEventListener("deviceready", () => {
         myUser.mic = "on";
 
         if (mySlot) {
-          socket.emit("toggle_mic", { slot: mySlot, userId: myUser.id, status: myUser.mic });
+          socket.emit("toggle_mic", {
+            slot: mySlot,
+            userId: myUser.id,
+            status: myUser.mic,
+          });
         }
       }
     });
@@ -958,6 +1169,12 @@ document.addEventListener("deviceready", () => {
       updateVideoElement(mySlot, socket.id, null, true);
       mySlot = null;
     }
+
+    // Sembunyikan form login lagi (jika ada)
+    if (loginForm) loginForm.style.display = "none";
+
+    if (userGreeting) userGreeting.style.display = "none"; // <-- SEMBUNYIKAN GREETING
+    // 🔥 AKHIR PERUBAHAN BARU
 
     for (const p in peers) {
       try {
@@ -985,11 +1202,77 @@ document.addEventListener("deviceready", () => {
   }
 
   const btnKeluar = document.getElementById("btnKeluar");
+  // -------------------------
+  // Side Menu Handlers (BARU)
+  // -------------------------
+
+  // Tampilkan tombol menu setelah Cordova ready
+  if (btnMenu) btnMenu.style.display = "flex";
+
+  function openMenu() {
+    if (sideMenu) {
+      sideMenu.classList.add("active");
+      sideMenu.style.pointerEvents = "all";
+    }
+  }
+
+  function closeMenu() {
+    if (sideMenu) {
+      sideMenu.classList.remove("active");
+      // Delay sedikit sebelum menonaktifkan pointer-events agar transisi selesai
+      setTimeout(() => {
+        sideMenu.style.pointerEvents = "none";
+      }, 300);
+    }
+  }
+
+  if (btnMenu) {
+    btnMenu.addEventListener("click", openMenu);
+  }
+
+  if (menuOverlay) {
+    menuOverlay.addEventListener("click", closeMenu);
+  }
+  if (btnMenu) btnMenu.style.display = "flex";
+
+  function openMenu() {
+    if (sideMenu) {
+      sideMenu.classList.add("active");
+      sideMenu.style.pointerEvents = "all";
+    }
+  }
+  if (btnMenu) btnMenu.style.display = "flex";
+
+  function openMenu() {
+    if (sideMenu) {
+      sideMenu.classList.add("active");
+      sideMenu.style.pointerEvents = "all";
+    }
+  }
+  function closeMenu() {
+    if (sideMenu) {
+      sideMenu.classList.remove("active");
+      // Delay sedikit sebelum menonaktifkan pointer-events agar transisi selesai
+      setTimeout(() => {
+        sideMenu.style.pointerEvents = "none";
+      }, 300);
+    }
+  }
+  if (btnMenu) {
+    btnMenu.addEventListener("click", openMenu);
+  }
+
+  if (menuOverlay) {
+    menuOverlay.addEventListener("click", closeMenu);
+  }
   if (btnKeluar)
     btnKeluar.onclick = () => {
-      if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
+      if (mySlot)
+        socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
       if (webcamStream) stopWebcamStream();
-      try { socket.close(); } catch (e) {}
+      try {
+        socket.close();
+      } catch (e) {}
       localCleanupAfterKick();
       location.reload();
     };
@@ -997,6 +1280,8 @@ document.addEventListener("deviceready", () => {
   window.addEventListener("beforeunload", () => {
     if (mySlot) socket.emit("leave_voice", { slot: mySlot, userId: myUser.id });
     if (webcamStream) stopWebcamStream();
-    try { socket.close(); } catch (e) {}
+    try {
+      socket.close();
+    } catch (e) {}
   });
 });

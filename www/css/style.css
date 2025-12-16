@@ -1,7 +1,8 @@
 /* =========================================
    Fix Tinggi Layar Mobile (Safari/Chrome)
 ========================================= */
-html, body {
+html,
+body {
   height: 100%;
   min-height: 100vh;
   min-height: -webkit-fill-available;
@@ -40,7 +41,8 @@ main {
   align-items: center;
 }
 
-#chatContainer, #statusBar {
+#chatContainer,
+#statusBar {
   text-align: center;
   width: 100%;
 }
@@ -119,7 +121,7 @@ footer {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -155,7 +157,7 @@ footer {
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 12px;
-  background: rgba(0,0,0,0.75);
+  background: rgba(0, 0, 0, 0.75);
   border-radius: 10px;
   color: white;
   font-size: 13px;
@@ -170,15 +172,21 @@ footer {
   pointer-events: none;
   z-index: 10;
 
-  box-shadow: 0 0 12px rgba(0,255,255,0.9), 0 0 20px rgba(0,255,255,0.7);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.9), 0 0 20px rgba(0, 255, 255, 0.7);
 
   opacity: 0;
   animation: fadeIn 0.15s forwards;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(5px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .floating-text.fade-out {
@@ -186,8 +194,13 @@ footer {
 }
 
 @keyframes fadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-5px);
+  }
 }
 
 /* =========================================
@@ -229,8 +242,8 @@ footer {
   color: white;
   font-size: 13px;
   backdrop-filter: blur(6px);
-  border: 1px solid rgba(0,255,200,0.3);
-  box-shadow: 0 0 12px rgba(0,255,200,0.75);
+  border: 1px solid rgba(0, 255, 200, 0.3);
+  box-shadow: 0 0 12px rgba(0, 255, 200, 0.75);
   opacity: 1;
   transform: translateY(0);
   transition: all 0.4s ease;
@@ -253,6 +266,92 @@ footer {
   align-items: center;
   justify-content: center;
 }
+/* =========================================
+   Tombol Burger Menu (BARU)
+========================================= */
+.menu-btn {
+  position: absolute;
+  top: 10px;
+  /* Geser posisi ke kanan, di sebelah tombol Keluar */
+  left: 50px;
+  background: #000000aa;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Atur ukuran agar tombol sebesar ikon pada image_9dd284.png */
+  width: 32px;
+  height: 32px;
+}
+
+.icon-menu {
+  width: 18px; /* Sesuaikan ukuran ikon di dalamnya */
+  height: 18px;
+  object-fit: contain;
+}
+
+/* =========================================
+   Side Menu (Panel Samping) (BARU)
+========================================= */
+.side-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%; /* Lebar penuh */
+  height: 100%;
+  z-index: 100; /* Pastikan di atas semua elemen lain */
+  pointer-events: none; /* Default tidak bisa diklik */
+}
+
+.menu-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0); /* Awalnya transparan */
+  transition: background 0.3s ease-in-out;
+}
+
+.menu-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 45%;
+  width: 50%; /* Muncul setengah, bisa disesuaikan */
+  max-width: 300px; /* Batasi lebar maksimal di layar besar */
+  background: #222222; /* Warna latar belakang menu */
+  color: #ddd;
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+  transform: translateX(-100%); /* Default tersembunyi di luar layar */
+  transition: transform 0.3s ease-in-out;
+}
+
+/* KELAS AKTIF */
+.side-menu.active .menu-overlay {
+  background: rgba(0, 0, 0, 0.5); /* Overlay saat aktif */
+  pointer-events: all; /* Overlay bisa diklik untuk menutup */
+}
+
+.side-menu.active .menu-content {
+  transform: translateX(0); /* Muncul ke layar */
+}
+
+/* =========================================
+   Mobile Tweaks Tambahan (Tambahkan penyesuaian untuk tombol menu)
+========================================= */
+@media (max-width: 480px) {
+  /* ... (Styling voice-slot, slot-name, mic-btn, kick-btn) ... */
+
+  .menu-btn {
+    left: 45px; /* Sesuaikan posisi di mobile */
+    width: 28px;
+    height: 28px;
+    padding: 2px 4px;
+  }
+}
 
 .icon-out {
   width: 16px;
@@ -271,7 +370,8 @@ footer {
   .slot-name {
     font-size: 11px;
   }
-  .mic-btn, .kick-btn {
+  .mic-btn,
+  .kick-btn {
     transform: scale(0.9);
   }
 }
@@ -304,7 +404,7 @@ footer {
   position: absolute;
   bottom: 5px;
   right: 5px;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   padding: 4px 6px;
   border-radius: 8px;
   font-size: 16px;
@@ -312,10 +412,10 @@ footer {
 }
 #screenShareContainer {
   display: none; /* default hidden */
-  width: 90%;        /* lebar penuh grid bawah */
-  height: 200px;      /* atau sesuaikan tinggi */
-  background: #000;   /* layar hitam sebelum share screen */
-  margin-top: 40px;   /* spasi dari grid avatar */
+  width: 90%; /* lebar penuh grid bawah */
+  height: 200px; /* atau sesuaikan tinggi */
+  background: #000; /* layar hitam sebelum share screen */
+  margin-top: 40px; /* spasi dari grid avatar */
   margin-bottom: 10px;
   /* display: flex; */
   justify-content: center;
@@ -349,7 +449,7 @@ footer {
 }
 
 .fullscreen-btn:hover {
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
 }
 .webcam-btn {
   position: absolute;
@@ -387,4 +487,100 @@ footer {
   height: 100%;
   object-fit: cover; /* Penting agar video mengisi container */
   position: absolute;
+}
+/* =========================================
+   Login Form di Side Menu (BARU)
+========================================= */
+.login-form {
+  padding: 10px 0;
+  background: transparent;
+  border-radius: 0;
+  margin-bottom: 10px;
+}
+.login-form input[type="text"],
+.login-form input[type="password"] {
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 6px;
+}
+
+.login-form h4 {
+  color: #fff;
+  margin-top: 0;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #444;
+  padding-bottom: 5px;
+}
+
+/* Menggunakan kembali input dari modal sebelumnya, tapi tanpa padding/margin khusus modal */
+.login-form input[type="text"],
+.login-form input[type="password"] {
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0 10px 0;
+  display: inline-block;
+  border: none;
+  border-radius: 4px;
+  box-sizing: border-box;
+  background: #444;
+  color: white;
+  font-size: 14px;
+}
+
+.full-width-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+/* Menggunakan kembali .login-error-message */
+/* style.css */
+
+/* Tambahkan styling dasar untuk tombol login */
+.btn-submit {
+  /* Hapus background dan border default jika ada */
+  background: none;
+  border: none;
+  padding: 0; /* Hapus padding default */
+  cursor: pointer;
+  display: flex; /* Untuk menempatkan gambar di tengah */
+  justify-content: center;
+  align-items: center;
+  width: 100%; /* Agar tombol menempati lebar penuh (jika diinginkan) */
+}
+
+/* Styling spesifik untuk tombol Login yang menggunakan gambar */
+.btn-image-login {
+    /* Anda bisa mengatur tinggi tombol jika tidak ingin menggunakan padding default */
+    height: 40px; /* Contoh tinggi */
+    margin-top: 10px;
+    transition: opacity 0.2s;
+}
+
+.btn-image-login:hover {
+    opacity: 0.8;
+}
+
+/* Styling untuk gambar di dalam tombol */
+.icon-login {
+    width: 50px; /* Sesuaikan lebar gambar login.png */
+    height: auto;
+    object-fit: contain;
+}
+
+/* Tambahkan styling untuk tombol saat disabled (mencegah klik ganda) */
+.btn-image-login:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Anda mungkin perlu memastikan input-input di form login di-style ulang */
+.login-form input[type="text"],
+.login-form input[type="password"] {
+  /* Pastikan styling ini sudah ada dan berfungsi */
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0 10px 0;
+  box-sizing: border-box;
+  background: #444;
+  color: white;
+  border-radius: 4px;
 }
