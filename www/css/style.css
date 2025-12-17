@@ -91,7 +91,7 @@ footer {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: #222;
+  background: #00000030;
   background-size: cover;
   background-position: center;
   transition: box-shadow 0.15s ease;
@@ -224,7 +224,8 @@ footer {
    Status Bar
 ========================================= */
 #statusBar {
-  margin-top: 5px;
+  margin-top: 20px;
+  margin-bottom: 20px;
   color: #ffffff;
   font-weight: bold;
   font-size: 14px;
@@ -689,7 +690,6 @@ footer {
 
 /* Animasi saat Input diklik (Focus) */
 #chatInput:focus {
-  width: 95%; /* Melebar saat diketik */
   background: rgba(0, 0, 0, 0.85);
   border-color: rgba(255, 255, 255, 0.5);
   
@@ -715,4 +715,41 @@ footer {
 #chatInput:hover {
   background: rgba(0, 0, 0, 0.7);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes blink {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Lingkaran Lampu Indikator */
+#statusBar::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background-color: #e74c3c; /* Warna default */
+}
+
+/* Kondisi Connected (Hijau) */
+#statusBar.connected {
+  color: #ffffff;
+}
+#statusBar.connected::before {
+  background-color: #2ecc71;
+  box-shadow: 0 0 10px #2ecc71;
+  animation: blink 1s infinite;
+}
+
+/* Kondisi Disconnected (Merah) */
+#statusBar.disconnected {
+  color: #ffffff;
+}
+#statusBar.disconnected::before {
+  background-color: #e74c3c;
+  box-shadow: 0 0 10px #e74c3c;
+  animation: blink 1s infinite;
 }

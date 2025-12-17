@@ -612,6 +612,7 @@ document.addEventListener("deviceready", () => {
 
   socket.on("connect", async () => {
     statusBar.innerText = "Connected";
+    statusBar.className = "connected"; // Tambah class hijau kedip
 
     try {
       const iceServers = await getTwilioIce();
@@ -622,6 +623,20 @@ document.addEventListener("deviceready", () => {
 
     socket.emit("identify", myUser);
     socket.emit("get_room_state");
+  });
+
+  // Saat Terputus
+  socket.on("disconnect", () => {
+    console.log("Disconnected from server");
+    statusBar.innerText = "Disconnected";
+    statusBar.className = "disconnected"; // Tambah class merah kedip
+
+    // Reset state jika perlu
+    voiceGrid.innerHTML = "";
+    for (let id in peers) {
+      peers[id].pc.close();
+      delete peers[id];
+    }
   });
 
   socket.on("room_state", ({ slots }) => {
