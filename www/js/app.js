@@ -5,7 +5,7 @@ document.addEventListener("deviceready", () => {
   // Constants & State
   // -------------------------
   const NUM_SLOTS = 8;
-  const SIGNALING_URL = "https://c1jx4415-4000.asse.devtunnels.ms";
+  const SIGNALING_URL = "https://m3h048qq-4000.asse.devtunnels.ms";
   let RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
   let isMuted = false;

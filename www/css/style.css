@@ -4,7 +4,7 @@
 html,
 body {
   height: 100%;
-  min-height: 100vh;
+  min-height: 200vh;
   min-height: -webkit-fill-available;
 }
 
@@ -583,4 +583,136 @@ footer {
   background: #444;
   color: white;
   border-radius: 4px;
+}
+/* =========================================
+   Animasi Button Atas (Hover & Click)
+========================================= */
+
+/* Selector untuk semua tombol navigasi atas */
+.keluar-btn, 
+.menu-btn, 
+.volume-btn, 
+.cast-btn, 
+.webcam-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); /* Transisi halus */
+  cursor: pointer;
+}
+
+/* Efek saat pointer diarahkan (Hover) */
+.keluar-btn:hover, 
+.menu-btn:hover, 
+.volume-btn:hover, 
+.cast-btn:hover, 
+.webcam-btn:hover {
+  transform: scale(1.1); /* Membesar sedikit */
+  background: #000000dd; /* Menjadi sedikit lebih terang */
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3); /* Cahaya halus */
+}
+
+/* Efek saat diklik (Active/Pressed) */
+.keluar-btn:active, 
+.menu-btn:active, 
+.volume-btn:active, 
+.cast-btn:active, 
+.webcam-btn:active {
+  transform: scale(0.9); /* Mengecil (seperti tertekan) */
+  background: #ffffff33; /* Flash warna putih transparan */
+  transition: all 0.05s; /* Lebih instan saat ditekan */
+}
+
+/* Khusus untuk tombol yang sedang aktif/on (seperti webcam hijau) */
+.webcam-btn[style*="background: rgb(0, 255, 0)"]:hover,
+.cast-btn[style*="background: rgb(0, 255, 0)"]:hover {
+  background: #0f0 !important; /* Tetap hijau saat hover */
+  filter: brightness(1.2); /* Tapi lebih terang */
+}
+
+/* =========================================
+   Animasi Hover pada Lingkaran (Slot)
+========================================= */
+
+/* 1. Atur transisi dasar pada slot agar gerakan halus */
+.slot {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efek sedikit membal/bounce */
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+/* 2. Efek saat Pointer diarahkan (Hover) */
+.slot:hover {
+  transform: scale(1.15); /* Lingkaran membesar 15% */
+  border-color: #fff; /* Border menjadi putih terang */
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6); /* Efek cahaya di sekitar lingkaran */
+  z-index: 10; /* Memastikan lingkaran yang di-hover berada di paling depan */
+  filter: brightness(1.2); /* Membuat konten di dalamnya sedikit lebih cerah */
+}
+
+/* 3. Efek saat Lingkaran diklik (Active) */
+.slot:active {
+  transform: scale(0.95); /* Sedikit mengecil saat ditekan untuk efek 'push' */
+  transition: all 0.1s;
+}
+
+/* 4. Jika di dalam slot ada gambar (avatar), pastikan ikut halus */
+.slot img {
+  transition: transform 0.3s ease;
+}
+
+.slot:hover img {
+  transform: rotate(5deg); /* Sedikit rotasi pada gambar saat hover agar dinamis */
+}
+/* =========================================
+   Modern Dark Chat Input
+======================================== */
+
+
+
+#chatInput {
+  width: 80%; /* Lebar awal */
+  max-width: 500px;
+  padding: 12px 20px;
+  font-size: 14px;
+  color: #ffffff;
+  
+  /* Nuansa Hitam Transparan (Glassmorphism) */
+  background: rgba(0, 0, 0, 0.6); 
+  backdrop-filter: blur(8px); /* Efek blur di belakang input */
+  
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 25px; /* Membuat lonjong modern */
+  
+  outline: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Animasi saat Input diklik (Focus) */
+#chatInput:focus {
+  width: 95%; /* Melebar saat diketik */
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(255, 255, 255, 0.5);
+  
+  /* Efek cahaya halus putih di sekeliling */
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1), 
+              0 8px 25px rgba(0, 0, 0, 0.5);
+  
+  transform: translateY(-2px); /* Sedikit terangkat */
+}
+
+/* Placeholder warna abu-abu gelap agar tetap terbaca */
+#chatInput::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  transition: opacity 0.3s;
+}
+
+/* Menghilangkan placeholder saat fokus */
+#chatInput:focus::placeholder {
+  opacity: 0;
+}
+
+/* Animasi halus saat pointer diarahkan (Hover) */
+#chatInput:hover {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
 }
